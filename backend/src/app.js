@@ -1,11 +1,21 @@
-require('dotenv').config();
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
-const Fastify = require('fastify');
-const config = require('./config');
-const pool = require('./config/db');
-const metrics = require('./utils/metrics');
-const { initializeWebSocket } = require('./websocket');
+// loadEnvironment();
+require("dotenv").config();
+
+// validateEnvironment();
+const validateEnv = require("./config/validateEnv");
+validateEnv();
+
+// initializeDatabase();
+const db = require("./config/db");
+
+const Fastify = require("fastify");
+const path = require("path");
+const { v4: uuidv4 } = require("uuid");
+const pool = require("./config/db");
+
+const config = require("./config");
+const metrics = require("./utils/metrics");
+const { initializeWebSocket } = require("./websocket");
 
 const app = Fastify({
   logger:
