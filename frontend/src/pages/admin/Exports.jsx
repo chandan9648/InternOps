@@ -89,10 +89,10 @@ export default function Exports() {
         {EXPORTS.map((e) => (
           <Card
             key={e.key}
-            className={`p-5 ${(!from || !to) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`p-5 ${!from || !to ? 'opacity-50 cursor-not-allowed' : ''}`}
             hover={!!(from && to)}
           >
-            <div onClick={() => ((from && to) ? download(e.key) : null)}>
+            <div onClick={() => (from && to ? download(e.key) : null)}>
               <div
                 className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${e.grad} text-white flex items-center justify-center text-2xl shadow-lg mb-3`}
               >
