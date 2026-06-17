@@ -46,4 +46,9 @@ async function bruteForceCheck(request, reply) {
   }
 }
 
-module.exports = { isAccountLocked, recordLoginAttempt, clearFailedAttempts, bruteForceCheck };
+module.exports = {
+  isAccountLocked,
+  recordLoginAttempt,
+  clearFailedAttempts,
+  bruteForceCheck,
+};

@@ -7,7 +7,10 @@ const {
   verifyRefreshToken,
 } = require('../../utils/tokens');
 const { createAuditLog } = require('../../utils/audit');
-const { recordLoginAttempt, clearFailedAttempts } = require('../../middleware/bruteForce');
+const {
+  recordLoginAttempt,
+  clearFailedAttempts,
+} = require('../../middleware/bruteForce');
 const { isValidStep } = require('../../utils/hierarchy');
 const { sendVerificationEmail } = require('./verificationService');
 
