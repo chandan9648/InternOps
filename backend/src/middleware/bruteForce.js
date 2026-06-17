@@ -19,6 +19,18 @@ async function recordLoginAttempt(email, ip, success) {
   );
 }
 
+/**
+ * Clears all failed login attempts for an email address.
+ * Must be called on every successful login so that prior attacker-driven
+ * failed attempts cannot cause a lockout for the legitimate user.
+ */
+async function clearFailedAttempts(email) {
+  await pool.query(
+    `DELETE FROM login_attempts WHERE email = $1 AND success = false`,
+    [email]
+  );
+}
+
 async function bruteForceCheck(request, reply) {
   if (process.env.NODE_ENV === 'test') {
     return;
@@ -34,4 +46,4 @@ async function bruteForceCheck(request, reply) {
   }
 }
 
-module.exports = { isAccountLocked, recordLoginAttempt, bruteForceCheck };
+module.exports = { isAccountLocked, recordLoginAttempt, clearFailedAttempts, bruteForceCheck };
