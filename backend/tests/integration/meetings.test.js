@@ -99,11 +99,10 @@ afterAll(async () => {
     await resetSeededAdminPassword();
   } catch {
     /* best-effort cleanup */
-  } finally{
+  } finally {
     // Close the app AFTER all cleanup is complete
     await app.close();
   }
-  
 });
 
 function authHeaders() {
@@ -157,9 +156,15 @@ describe('Meetings Integration Tests', () => {
     });
 
     it('should report skipped attendees when hierarchy access is denied', async () => {
-      const dept1Res = await pool.query("INSERT INTO departments (name) VALUES ('Test Dept 1 ' || $1) RETURNING id", [Date.now()]);
+      const dept1Res = await pool.query(
+        "INSERT INTO departments (name) VALUES ('Test Dept 1 ' || $1) RETURNING id",
+        [Date.now()]
+      );
       const dept1Id = dept1Res.rows[0].id;
-      const dept2Res = await pool.query("INSERT INTO departments (name) VALUES ('Test Dept 2 ' || $1) RETURNING id", [Date.now()]);
+      const dept2Res = await pool.query(
+        "INSERT INTO departments (name) VALUES ('Test Dept 2 ' || $1) RETURNING id",
+        [Date.now()]
+      );
       const dept2Id = dept2Res.rows[0].id;
 
       const manager = await createUserAsAdmin({
