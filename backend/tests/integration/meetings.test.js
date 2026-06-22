@@ -99,8 +99,10 @@ afterAll(async () => {
     await resetSeededAdminPassword();
   } catch {
     /* best-effort cleanup */
+  } finally {
+    // Close the app AFTER all cleanup is complete
+    await app.close();
   }
-  await app.close();
 });
 
 function authHeaders() {
