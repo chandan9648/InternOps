@@ -3,6 +3,7 @@
 .env.production
 node_modules/
 dist/
+.vscode/
 build/
 coverage/
 logs/
