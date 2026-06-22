@@ -8,11 +8,15 @@ async function checkHierarchyAccess(requesterId, targetUserId) {
   );
   if (usersRes.rowCount !== 2) return false;
 
-  const requester = usersRes.rows.find(u => u.id === requesterId);
-  const target = usersRes.rows.find(u => u.id === targetUserId);
+  const requester = usersRes.rows.find((u) => u.id === requesterId);
+  const target = usersRes.rows.find((u) => u.id === targetUserId);
 
   if (requester.role !== 'ADMIN' && target.role !== 'ADMIN') {
-    if (!requester.department_id || !target.department_id || requester.department_id !== target.department_id) {
+    if (
+      !requester.department_id ||
+      !target.department_id ||
+      requester.department_id !== target.department_id
+    ) {
       return false;
     }
   }
