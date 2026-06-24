@@ -1,6 +1,8 @@
 const auth = require('../../middleware/auth');
 const pool = require('../../config/db');
 const { z } = require('zod');
+const rbac = require('../../middleware/rbac');
+const repo = require('./repository');
 
 const auditQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
