@@ -99,7 +99,10 @@ describe('Audit Integration Tests', () => {
       url: '/api/auth/csrf-token',
     });
     adminCsrfToken = JSON.parse(adminCsrfRes.body).csrfToken;
-    mergeCookies(adminCookies, parseSetCookie(adminCsrfRes.headers['set-cookie']));
+    mergeCookies(
+      adminCookies,
+      parseSetCookie(adminCsrfRes.headers['set-cookie'])
+    );
     mergeCookies(adminCookies, adminCsrfRes.cookies);
 
     const adminLoginRes = await app.inject({
@@ -116,7 +119,10 @@ describe('Audit Integration Tests', () => {
       },
     });
     adminToken = JSON.parse(adminLoginRes.body).accessToken;
-    mergeCookies(adminCookies, parseSetCookie(adminLoginRes.headers['set-cookie']));
+    mergeCookies(
+      adminCookies,
+      parseSetCookie(adminLoginRes.headers['set-cookie'])
+    );
 
     // Login Intern to get token/cookies
     const internCsrfRes = await app.inject({
@@ -124,7 +130,10 @@ describe('Audit Integration Tests', () => {
       url: '/api/auth/csrf-token',
     });
     internCsrfToken = JSON.parse(internCsrfRes.body).csrfToken;
-    mergeCookies(internCookies, parseSetCookie(internCsrfRes.headers['set-cookie']));
+    mergeCookies(
+      internCookies,
+      parseSetCookie(internCsrfRes.headers['set-cookie'])
+    );
     mergeCookies(internCookies, internCsrfRes.cookies);
 
     const internLoginRes = await app.inject({
@@ -141,23 +150,26 @@ describe('Audit Integration Tests', () => {
       },
     });
     internToken = JSON.parse(internLoginRes.body).accessToken;
-    mergeCookies(internCookies, parseSetCookie(internLoginRes.headers['set-cookie']));
+    mergeCookies(
+      internCookies,
+      parseSetCookie(internLoginRes.headers['set-cookie'])
+    );
   });
 
   afterAll(async () => {
-  // Cleanup - ensure all queries complete before closing app
-  try {
-    await pool.query(
-      'DELETE FROM audit_logs WHERE user_id = $1 OR user_id = $2 OR (user_id IS NULL AND action = $3)',
-      [adminUserId, internId, 'SYSTEM_UPDATE']
-    );
-    await pool.query('DELETE FROM users WHERE id = $1', [internId]);
-  } catch (error) {
-    console.error('Cleanup error:', error);
-  } finally {
-    await app.close();
-  }
-});
+    // Cleanup - ensure all queries complete before closing app
+    try {
+      await pool.query(
+        'DELETE FROM audit_logs WHERE user_id = $1 OR user_id = $2 OR (user_id IS NULL AND action = $3)',
+        [adminUserId, internId, 'SYSTEM_UPDATE']
+      );
+      await pool.query('DELETE FROM users WHERE id = $1', [internId]);
+    } catch (error) {
+      console.error('Cleanup error:', error);
+    } finally {
+      await app.close();
+    }
+  });
 
   describe('GET /api/audit authentication', () => {
     it('should reject unauthenticated request', async () => {
@@ -255,12 +267,14 @@ describe('Audit Integration Tests', () => {
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      expect(body.data.every((log) => log.resource_type === 'system')).toBe(true);
+      expect(body.data.every((log) => log.resource_type === 'system')).toBe(
+        true
+      );
     });
   });
 
   describe('GET /api/audit as Non-Admin (Intern)', () => {
-    it('should only return the intern\'s own audit logs', async () => {
+    it("should only return the intern's own audit logs", async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/audit',
