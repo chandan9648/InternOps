@@ -40,7 +40,9 @@ async function routes(fastify) {
       conditions.push(`al.resource_type = $${params.length}`);
     }
 
-    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const whereClause = conditions.length
+      ? `WHERE ${conditions.join(' AND ')}`
+      : '';
 
     // Fetch total matching records for pagination
     const totalResult = await pool.query(
