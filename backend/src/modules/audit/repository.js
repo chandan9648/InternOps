@@ -1,17 +1,46 @@
 const pool = require('../../config/db');
 
-async function getAuditLogs(limit, offset) {
+async function getAuditLogs(limit, offset, filters = {}) {
+  const { userId, resourceType } = filters;
+  const conditions = [];
+  const params = [];
+
+  if (userId) {
+    params.push(userId);
+    conditions.push(`al.user_id = $${params.length}`);
+  }
+
+  if (resourceType) {
+    params.push(resourceType);
+    conditions.push(`al.resource_type = $${params.length}`);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  // Get total count matching the filters
+  const totalResult = await pool.query(
+    `SELECT COUNT(*) FROM audit_logs al ${whereClause}`,
+    params
+  );
+
+  // Add limit and offset params for the records query
+  params.push(limit);
+  const limitIndex = params.length;
+  params.push(offset);
+  const offsetIndex = params.length;
+
   const logs = await pool.query(
     `
     SELECT al.*, u.full_name AS actor_name, u.email AS actor_email
     FROM audit_logs al
     LEFT JOIN users u ON al.user_id = u.id
+    ${whereClause}
     ORDER BY al.created_at DESC
-    LIMIT $1 OFFSET $2
+    LIMIT $${limitIndex} OFFSET $${offsetIndex}
     `,
-    [limit, offset]
+    params
   );
-  const totalResult = await pool.query('SELECT COUNT(*) FROM audit_logs');
+
   return {
     records: logs.rows,
     total: Number(totalResult.rows[0].count),
