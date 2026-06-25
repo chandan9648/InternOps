@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const config = require('../../config');
-
+const { pipeline } = require('stream/promises');
 const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/gif'];
 const ALLOWED_EXTS = ['.jpg', '.jpeg', '.png', '.gif'];
 
@@ -57,15 +57,6 @@ async function routes(fastify) {
       }
 
       // Buffer the upload to validate contents, then persist
-      const buffer = await data.toBuffer();
-
-      // Magic-byte verification — defends against MIME spoofing
-      const detectedMime = detectMimeFromBuffer(buffer);
-      if (!detectedMime || detectedMime !== data.mimetype) {
-        return reply
-          .status(400)
-          .send({ error: 'File contents do not match declared image type' });
-      }
 
       // Authorization: the intern must actually be assigned to the task
       const isAssigned = await repo.isTaskAssignedToUser(task_id, req.user.id);
@@ -85,7 +76,22 @@ async function routes(fastify) {
       );
       await fs.promises.mkdir(absoluteUploadDir, { recursive: true });
       const uploadPath = path.join(absoluteUploadDir, filename);
-      await fs.promises.writeFile(uploadPath, buffer);
+
+      const firstChunk = await data.file.read(16);
+
+      const detectedMime = detectMimeFromBuffer(firstChunk);
+      if (!detectedMime || detectedMime !== data.mimetype) {
+        return reply
+          .status(400)
+          .send({ error: 'File contents do not match declared image type' });
+      }
+
+      const writeStream = fs.createWriteStream(uploadPath);
+
+      writeStream.write(firstChunk);
+
+      await pipeline(data.file, writeStream);
+
       const dbSavedPath = ['uploads', filename].join('/');
       const proof = await repo.submitProof(task_id, req.user.id, dbSavedPath);
       req.auditOnResponse = {

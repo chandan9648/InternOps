@@ -246,11 +246,23 @@ async function parseJsonResponseWithLimit(response, providerName) {
   }
 }
 
+const MAX_MESSAGES = 32;
+const MAX_MESSAGE_CHARS = 4000;
+const MAX_TOTAL_CHARS = 32000;
+
 function buildPrompt(messages = []) {
-  return messages
-    .filter((m) => m.role === 'user' || m.role === 'assistant')
-    .map((m) => `${m.role}: ${String(m.content || '').slice(0, 2000)}`)
-    .join('\n');
+  const trimmed = messages.slice(0, MAX_MESSAGES).map((m) => ({
+    role: m.role,
+    content: String(m.content || '').slice(0, MAX_MESSAGE_CHARS),
+  }));
+
+  const totalChars = trimmed.reduce((sum, m) => sum + m.content.length, 0);
+
+  if (totalChars > MAX_TOTAL_CHARS) {
+    throw new Error('Prompt too long');
+  }
+
+  return trimmed.map((m) => `${m.role}: ${m.content}`).join('\n');
 }
 
 async function callOpenAICompatible({

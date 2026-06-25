@@ -1,7 +1,9 @@
-﻿const cron = require('node-cron');
+const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 const pool = require('../config/db');
+
+const BATCH_SIZE = 20; // process 20 files at a time — no extra dependency needed
 
 function setupCronJobs() {
   try {
@@ -30,13 +32,22 @@ function setupCronJobs() {
 
         let filesDeleted = 0;
 
-        // Delete physical files
-        for (const row of rows) {
-          const fp = path.join(__dirname, '..', '..', row.image_path);
-          if (fs.existsSync(fp)) {
-            fs.unlinkSync(fp);
-            filesDeleted++;
-          }
+        // Delete physical files in batches of BATCH_SIZE (fix #504)
+        // Async fs.promises.unlink replaces blocking fs.existsSync + fs.unlinkSync.
+        // Batching avoids EMFILE (too many open files) without any extra dependency.
+        for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+          const batch = rows.slice(i, i + BATCH_SIZE);
+          await Promise.allSettled(
+            batch.map(async (row) => {
+              const fp = path.join(__dirname, '..', '..', row.image_path);
+              try {
+                await fs.promises.unlink(fp);
+                filesDeleted++;
+              } catch (err) {
+                if (err.code !== 'ENOENT') throw err;
+              }
+            })
+          );
         }
 
         // Update database records

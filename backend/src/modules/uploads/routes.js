@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const auth = require('../../middleware/auth');
-const pool = require('../../config/db');
+const repo = require('./repository');
 const config = require('../../config');
 
 const ALLOWED = [
@@ -59,10 +59,7 @@ async function routes(fastify) {
     fs.writeFileSync(path.join(uploadPath, fileName), buffer);
 
     const url = `/uploads/${fileName}`;
-    await pool.query('UPDATE users SET avatar_url = $1 WHERE id = $2', [
-      url,
-      req.user.id,
-    ]);
+    await repo.updateAvatarUrl(req.user.id, url);
 
     return { success: true, avatar_url: url };
   });

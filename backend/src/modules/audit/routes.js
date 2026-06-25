@@ -1,25 +1,15 @@
 const auth = require('../../middleware/auth');
 const rbac = require('../../middleware/rbac');
-const pool = require('../../config/db');
+const repo = require('./repository');
 async function routes(fastify) {
   fastify.get('/', { preHandler: [auth, rbac('ADMIN')] }, async (req) => {
     const page = Number(req.query.page || 1);
     const limit = Number(req.query.limit || 50);
     const offset = (page - 1) * limit;
-    const logs = await pool.query(
-      `
-      SELECT al.*, u.full_name AS actor_name, u.email AS actor_email
-      FROM audit_logs al
-      LEFT JOIN users u ON al.user_id = u.id
-      ORDER BY al.created_at DESC
-      LIMIT $1 OFFSET $2
-      `,
-      [limit, offset]
-    );
-    const totalResult = await pool.query('SELECT COUNT(*) FROM audit_logs');
+    const { records, total } = await repo.getAuditLogs(limit, offset);
     return {
-      data: logs.rows,
-      total: Number(totalResult.rows[0].count),
+      data: records,
+      total,
       page,
       limit,
     };
