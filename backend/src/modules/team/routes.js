@@ -1,6 +1,6 @@
 const auth = require('../../middleware/auth');
 const rbac = require('../../middleware/rbac');
-const directManager = require('../../middleware/directManager');
+const ownership = require('../../middleware/ownership');
 const requireFreshRole = require('../../middleware/requireFreshRole');
 const repo = require('./repository');
 const { extractRequestInfo } = require('../../utils/audit');
@@ -154,7 +154,7 @@ async function routes(fastify) {
 
   fastify.get(
     '/members/:id',
-    { preHandler: [auth, rbac(...MANAGER_ROLES), directManager('id')] },
+    { preHandler: [auth, rbac(...MANAGER_ROLES), ownership('id')] },
     async (req, reply) => {
       const member = await repo.getMemberById(req.params.id);
       return member || reply.status(404).send({ error: 'Member not found' });
@@ -163,13 +163,13 @@ async function routes(fastify) {
 
   fastify.get(
     '/members/:id/history',
-    { preHandler: [auth, rbac(...MANAGER_ROLES), directManager('id')] },
+    { preHandler: [auth, rbac(...MANAGER_ROLES), ownership('id')] },
     async (req) => repo.getMemberHistory(req.params.id)
   );
 
   fastify.patch(
     '/members/:id',
-    { preHandler: [auth, rbac(...MANAGER_ROLES), directManager('id')] },
+    { preHandler: [auth, rbac(...MANAGER_ROLES), ownership('id')] },
     async (req, reply) => {
       const data = updateSchema.parse(req.body);
       const before = await repo.getMemberById(req.params.id);
@@ -196,7 +196,7 @@ async function routes(fastify) {
         auth,
         requireFreshRole,
         rbac(...MANAGER_ROLES),
-        directManager('id'),
+        ownership('id'),
       ],
     },
     async (req, reply) => {
@@ -232,7 +232,7 @@ async function routes(fastify) {
         auth,
         requireFreshRole,
         rbac(...MANAGER_ROLES),
-        directManager('id'),
+        ownership('id'),
       ],
     },
     async (req, reply) => {
@@ -292,7 +292,7 @@ async function routes(fastify) {
 
   fastify.patch(
     '/members/:id/manager',
-    { preHandler: [auth, rbac(...MANAGER_ROLES), directManager('id')] },
+    { preHandler: [auth, rbac(...MANAGER_ROLES), ownership('id')] },
     async (req, reply) => {
       const { manager_id } = z
         .object({ manager_id: z.string().uuid() })

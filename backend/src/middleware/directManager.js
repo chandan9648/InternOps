@@ -1,4 +1,4 @@
-const { checkHierarchyAccess, isValidStep } = require('../utils/hierarchy');
+const { isDirectManager, isValidStep } = require('../utils/hierarchy');
 const pool = require('../config/db');
 function directManagerValidation(field = 'user_id') {
   return async (request, reply) => {
@@ -11,16 +11,15 @@ function directManagerValidation(field = 'user_id') {
       [target]
     );
     if (!user) return reply.status(404).send({ error: 'User not found' });
-    
-    if (request.user.role !== 'ADMIN') {
-      const inHierarchy = await checkHierarchyAccess(request.user.id, target);
-      if (!inHierarchy || !isValidStep(request.user.role, user.role)) {
-        return reply
-          .status(403)
-          .send({ error: 'Not in your hierarchy or invalid step' });
-      }
+    const { isValidStep } = require('../utils/hierarchy');
+    if (
+      user.manager_id !== request.user.id ||
+      !isValidStep(request.user.role, user.role)
+    ) {
+      return reply
+        .status(403)
+        .send({ error: 'Not your direct report or invalid step' });
     }
-    
     request.resolvedTarget = target;
   };
 }
