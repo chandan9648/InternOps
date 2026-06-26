@@ -99,7 +99,10 @@ describe('Audit Integration Tests', () => {
       url: '/api/auth/csrf-token',
     });
     adminCsrfToken = JSON.parse(adminCsrfRes.body).csrfToken;
-    mergeCookies(adminCookies, parseSetCookie(adminCsrfRes.headers['set-cookie']));
+    mergeCookies(
+      adminCookies,
+      parseSetCookie(adminCsrfRes.headers['set-cookie'])
+    );
     mergeCookies(adminCookies, adminCsrfRes.cookies);
 
     const adminLoginRes = await app.inject({
@@ -116,7 +119,10 @@ describe('Audit Integration Tests', () => {
       },
     });
     adminToken = JSON.parse(adminLoginRes.body).accessToken;
-    mergeCookies(adminCookies, parseSetCookie(adminLoginRes.headers['set-cookie']));
+    mergeCookies(
+      adminCookies,
+      parseSetCookie(adminLoginRes.headers['set-cookie'])
+    );
 
     // Login Intern
     const internCsrfRes = await app.inject({
@@ -124,7 +130,10 @@ describe('Audit Integration Tests', () => {
       url: '/api/auth/csrf-token',
     });
     internCsrfToken = JSON.parse(internCsrfRes.body).csrfToken;
-    mergeCookies(internCookies, parseSetCookie(internCsrfRes.headers['set-cookie']));
+    mergeCookies(
+      internCookies,
+      parseSetCookie(internCsrfRes.headers['set-cookie'])
+    );
     mergeCookies(internCookies, internCsrfRes.cookies);
 
     const internLoginRes = await app.inject({
@@ -141,7 +150,10 @@ describe('Audit Integration Tests', () => {
       },
     });
     internToken = JSON.parse(internLoginRes.body).accessToken;
-    mergeCookies(internCookies, parseSetCookie(internLoginRes.headers['set-cookie']));
+    mergeCookies(
+      internCookies,
+      parseSetCookie(internLoginRes.headers['set-cookie'])
+    );
   });
 
   afterAll(async () => {
@@ -279,7 +291,9 @@ describe('Audit Integration Tests', () => {
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      expect(body.data.every((log) => log.resource_type === 'system')).toBe(true);
+      expect(body.data.every((log) => log.resource_type === 'system')).toBe(
+        true
+      );
     });
 
     it('should return empty data array (not error) when no logs match filters', async () => {
@@ -302,7 +316,11 @@ describe('Audit Integration Tests', () => {
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      expect(body.data.every((log) => log.user_id === internId && log.resource_type === 'auth')).toBe(true);
+      expect(
+        body.data.every(
+          (log) => log.user_id === internId && log.resource_type === 'auth'
+        )
+      ).toBe(true);
       expect(body.total).toBe(1);
     });
   });
@@ -356,7 +374,7 @@ describe('Audit Integration Tests', () => {
     });
 
     // NEW: intern can filter their own logs by resourceType
-    it("should allow intern to filter their own logs by resourceType", async () => {
+    it('should allow intern to filter their own logs by resourceType', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/audit?resourceType=auth',
