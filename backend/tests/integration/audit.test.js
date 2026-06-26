@@ -25,6 +25,11 @@ describe('Audit Integration Tests', () => {
 
   let adminUserId;
 
+  // Track seeded log IDs so tests can find the exact rows they care about
+  const seededAdminLogId = uuidv4();
+  const seededInternLogId = uuidv4();
+  const seededSystemLogId = uuidv4();
+
   beforeAll(async () => {
     await app.ready();
     await resetSeededAdminPassword();
@@ -44,52 +49,50 @@ describe('Audit Integration Tests', () => {
       [internId, internEmail, internHash]
     );
 
-    // Insert mock audit logs
-    // 1. Admin login action
+    // Insert mock audit logs with known IDs so tests can find exact rows
+    // Use a unique action prefix 'AUDIT_TEST_' to distinguish from real login logs
     await pool.query(
       `INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, ip_address, user_agent, details)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
-        uuidv4(),
+        seededAdminLogId,
         adminUserId,
-        'LOGIN',
+        'AUDIT_TEST_LOGIN',
         'auth',
         adminUserId,
         '192.168.1.1',
         'Mozilla/5.0',
-        JSON.stringify({ admin: true }),
+        JSON.stringify({ seeded: true }),
       ]
     );
 
-    // 2. Intern login action
     await pool.query(
       `INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, ip_address, user_agent, details)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
-        uuidv4(),
+        seededInternLogId,
         internId,
-        'LOGIN',
+        'AUDIT_TEST_LOGIN',
         'auth',
         internId,
         '10.0.0.1',
         'Chrome/100',
-        JSON.stringify({ intern: true }),
+        JSON.stringify({ seeded: true }),
       ]
     );
 
-    // 3. System action (null user_id)
     await pool.query(
       `INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, ip_address, user_agent, details)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
-        uuidv4(),
+        seededSystemLogId,
         null,
-        'SYSTEM_UPDATE',
+        'AUDIT_TEST_SYSTEM_UPDATE',
         'system',
         null,
         '127.0.0.1',
         'InternOpsCron',
-        JSON.stringify({ task: 'cleanup' }),
+        JSON.stringify({ seeded: true }),
       ]
     );
 
@@ -99,10 +102,7 @@ describe('Audit Integration Tests', () => {
       url: '/api/auth/csrf-token',
     });
     adminCsrfToken = JSON.parse(adminCsrfRes.body).csrfToken;
-    mergeCookies(
-      adminCookies,
-      parseSetCookie(adminCsrfRes.headers['set-cookie'])
-    );
+    mergeCookies(adminCookies, parseSetCookie(adminCsrfRes.headers['set-cookie']));
     mergeCookies(adminCookies, adminCsrfRes.cookies);
 
     const adminLoginRes = await app.inject({
@@ -119,10 +119,7 @@ describe('Audit Integration Tests', () => {
       },
     });
     adminToken = JSON.parse(adminLoginRes.body).accessToken;
-    mergeCookies(
-      adminCookies,
-      parseSetCookie(adminLoginRes.headers['set-cookie'])
-    );
+    mergeCookies(adminCookies, parseSetCookie(adminLoginRes.headers['set-cookie']));
 
     // Login Intern
     const internCsrfRes = await app.inject({
@@ -130,10 +127,7 @@ describe('Audit Integration Tests', () => {
       url: '/api/auth/csrf-token',
     });
     internCsrfToken = JSON.parse(internCsrfRes.body).csrfToken;
-    mergeCookies(
-      internCookies,
-      parseSetCookie(internCsrfRes.headers['set-cookie'])
-    );
+    mergeCookies(internCookies, parseSetCookie(internCsrfRes.headers['set-cookie']));
     mergeCookies(internCookies, internCsrfRes.cookies);
 
     const internLoginRes = await app.inject({
@@ -150,16 +144,14 @@ describe('Audit Integration Tests', () => {
       },
     });
     internToken = JSON.parse(internLoginRes.body).accessToken;
-    mergeCookies(
-      internCookies,
-      parseSetCookie(internLoginRes.headers['set-cookie'])
-    );
+    mergeCookies(internCookies, parseSetCookie(internLoginRes.headers['set-cookie']));
   });
 
   afterAll(async () => {
+    // Only delete the rows we explicitly inserted — don't touch real login audit logs
     await pool.query(
-      'DELETE FROM audit_logs WHERE user_id = $1 OR user_id = $2 OR (user_id IS NULL AND action = $3)',
-      [adminUserId, internId, 'SYSTEM_UPDATE']
+      'DELETE FROM audit_logs WHERE id IN ($1, $2, $3)',
+      [seededAdminLogId, seededInternLogId, seededSystemLogId]
     );
     await pool.query('DELETE FROM users WHERE id = $1', [internId]);
     await app.close();
@@ -189,6 +181,8 @@ describe('Audit Integration Tests', () => {
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
       expect(body.data).toBeDefined();
+      expect(Array.isArray(body.data)).toBe(true);
+      // At least our 3 seeded rows plus real login logs
       expect(body.total).toBeGreaterThanOrEqual(3);
       expect(body.page).toBe(1);
       expect(body.limit).toBe(50);
@@ -197,15 +191,16 @@ describe('Audit Integration Tests', () => {
     it('should not strip ip_address or user_agent for admin', async () => {
       const res = await app.inject({
         method: 'GET',
-        url: '/api/audit',
+        url: `/api/audit?userId=${internId}`,
         headers: { Authorization: `Bearer ${adminToken}` },
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      const internLog = body.data.find((log) => log.user_id === internId);
-      expect(internLog).toBeDefined();
-      expect(internLog.ip_address).toBe('10.0.0.1');
-      expect(internLog.user_agent).toBe('Chrome/100');
+      // Find our specific seeded row by ID — not just any intern row
+      const seededLog = body.data.find((log) => log.id === seededInternLogId);
+      expect(seededLog).toBeDefined();
+      expect(seededLog.ip_address).toBe('10.0.0.1');
+      expect(seededLog.user_agent).toBe('Chrome/100');
     });
 
     it('should support pagination parameters', async () => {
@@ -221,9 +216,6 @@ describe('Audit Integration Tests', () => {
       expect(body.page).toBe(1);
     });
 
-    // FIX: Zod uses .max(100) which REJECTS values over 100 — expects 400, not 200.
-    // If you want silent clamping instead, change the schema to .transform(v => Math.min(v, 100))
-    // and flip this test to expect 200 with body.limit === 100.
     it('should reject limit over 100', async () => {
       const res = await app.inject({
         method: 'GET',
@@ -262,7 +254,7 @@ describe('Audit Integration Tests', () => {
       expect(res.statusCode).toBe(400);
     });
 
-    it('should filter by userId', async () => {
+    it('should filter by userId and only return that user\'s logs', async () => {
       const res = await app.inject({
         method: 'GET',
         url: `/api/audit?userId=${internId}`,
@@ -270,8 +262,11 @@ describe('Audit Integration Tests', () => {
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
+      // Every returned row must belong to the intern
       expect(body.data.every((log) => log.user_id === internId)).toBe(true);
-      expect(body.total).toBe(1);
+      // Must include at least our seeded row
+      const seededLog = body.data.find((log) => log.id === seededInternLogId);
+      expect(seededLog).toBeDefined();
     });
 
     it('should reject invalid UUID for userId', async () => {
@@ -291,15 +286,16 @@ describe('Audit Integration Tests', () => {
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      expect(body.data.every((log) => log.resource_type === 'system')).toBe(
-        true
-      );
+      expect(body.data.every((log) => log.resource_type === 'system')).toBe(true);
+      // Must include our seeded system log
+      const seededLog = body.data.find((log) => log.id === seededSystemLogId);
+      expect(seededLog).toBeDefined();
     });
 
-    it('should return empty data array (not error) when no logs match filters', async () => {
+    it('should return empty data array when no logs match filters', async () => {
       const res = await app.inject({
         method: 'GET',
-        url: '/api/audit?resourceType=nonexistent_type',
+        url: '/api/audit?resourceType=nonexistent_type_xyz',
         headers: { Authorization: `Bearer ${adminToken}` },
       });
       expect(res.statusCode).toBe(200);
@@ -321,7 +317,9 @@ describe('Audit Integration Tests', () => {
           (log) => log.user_id === internId && log.resource_type === 'auth'
         )
       ).toBe(true);
-      expect(body.total).toBe(1);
+      // Our seeded intern log is resource_type=auth, so it must be present
+      const seededLog = body.data.find((log) => log.id === seededInternLogId);
+      expect(seededLog).toBeDefined();
     });
   });
 
@@ -336,12 +334,13 @@ describe('Audit Integration Tests', () => {
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
+      // Every row must belong to intern — no other user's logs
       expect(body.data.every((log) => log.user_id === internId)).toBe(true);
-      expect(body.total).toBe(1);
+      // Our seeded row must be present
+      const seededLog = body.data.find((log) => log.id === seededInternLogId);
+      expect(seededLog).toBeDefined();
     });
 
-    // FIX: renamed from "coerce/overwrite" — the code ignores the param entirely for non-admins,
-    // it does not coerce it. The behaviour is correct; the name was misleading.
     it('should ignore userId param for non-admins and always return only own logs', async () => {
       const res = await app.inject({
         method: 'GET',
@@ -350,16 +349,12 @@ describe('Audit Integration Tests', () => {
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      // Must contain only intern's own logs, never admin's
+      // Must never contain admin logs
       expect(body.data.every((log) => log.user_id === internId)).toBe(true);
       expect(body.data.some((log) => log.user_id === adminUserId)).toBe(false);
-      expect(body.total).toBe(1);
     });
 
-    // FIX: removed the confused dead-branch comment. The original test was actually
-    // checking that own logs are NOT stripped — which is correct and worth keeping,
-    // just with a clear name.
-    it("should not strip ip_address or user_agent from intern's own logs", async () => {
+    it("should not strip ip_address or user_agent from intern's own seeded log", async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/audit',
@@ -367,13 +362,13 @@ describe('Audit Integration Tests', () => {
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      const ownLog = body.data.find((log) => log.user_id === internId);
-      expect(ownLog).toBeDefined();
-      expect(ownLog.ip_address).toBe('10.0.0.1');
-      expect(ownLog.user_agent).toBe('Chrome/100');
+      // Look up the specific seeded row by its known ID, not just any intern log
+      const seededLog = body.data.find((log) => log.id === seededInternLogId);
+      expect(seededLog).toBeDefined();
+      expect(seededLog.ip_address).toBe('10.0.0.1');
+      expect(seededLog.user_agent).toBe('Chrome/100');
     });
 
-    // NEW: intern can filter their own logs by resourceType
     it('should allow intern to filter their own logs by resourceType', async () => {
       const res = await app.inject({
         method: 'GET',
@@ -384,11 +379,11 @@ describe('Audit Integration Tests', () => {
       const body = JSON.parse(res.body);
       expect(body.data.every((log) => log.user_id === internId)).toBe(true);
       expect(body.data.every((log) => log.resource_type === 'auth')).toBe(true);
-      expect(body.total).toBe(1);
+      const seededLog = body.data.find((log) => log.id === seededInternLogId);
+      expect(seededLog).toBeDefined();
     });
 
-    // NEW: intern filtering by a resourceType they have no logs for returns empty, not admin's logs
-    it('should return empty results when intern filters by resourceType with no matching own logs', async () => {
+    it('should return empty results when intern filters by a resourceType with no own logs', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/audit?resourceType=system',
@@ -396,12 +391,11 @@ describe('Audit Integration Tests', () => {
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      // System log has user_id = null, so intern must not see it
+      // System log has user_id = null — intern must not see it
       expect(body.data).toEqual([]);
       expect(body.total).toBe(0);
     });
 
-    // NEW: pagination still works for non-admins
     it('should support pagination for non-admin users', async () => {
       const res = await app.inject({
         method: 'GET',
