@@ -13,6 +13,20 @@ async function createTask({
   );
   return res.rows[0];
 }
+<<<<<<< HEAD
+=======
+
+async function assignTask(taskId, userIds, assignedBy) {
+  if (!userIds || userIds.length === 0) return;
+  const values = userIds
+    .map((_, i) => `($1, $${i + 2}, $${userIds.length + 2})`)
+    .join(',');
+  await pool.query(
+    `INSERT INTO task_assignments (task_id, user_id, assigned_by) VALUES ${values}`,
+    [taskId, ...userIds, assignedBy]
+  );
+}
+>>>>>>> cc4a5065d074ab76411fd243fa48d7296ee81005
 async function getUserEmail(userId) {
   const res = await pool.query('SELECT email FROM users WHERE id = $1', [
     userId,
@@ -31,7 +45,7 @@ async function getTasks(filters, userId, userRole) {
   const params = [];
   const where = ['st.deleted_at IS NULL'];
 
-  if (!['ADMIN', 'SENIOR_TL'].includes(userRole)) {
+  if (!['ADMIN', 'SENIOR_TL', 'TL', 'CAPTAIN'].includes(userRole)) {
     params.push(userId);
     where.push(
       `(st.id IN (SELECT task_id FROM task_assignments WHERE user_id = $${params.length} AND deleted_at IS NULL) OR st.created_by = $${params.length})`

@@ -121,7 +121,7 @@ export default function AdminDashboard() {
   return (
     <div>
       <PageHeader
-        title="User Directory"
+        title="Users"
         subtitle="Manage all platform accounts, roles, and status"
         actions={
           <button

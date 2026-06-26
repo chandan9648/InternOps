@@ -19,10 +19,13 @@ function timeAgo(d) {
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return new Date(d).toLocaleDateString();
 }
-
 export default function Notifications() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
+<<<<<<< HEAD
+=======
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+>>>>>>> cc4a5065d074ab76411fd243fa48d7296ee81005
 
   const { data, isLoading } = useQuery({
     queryKey: ['notifications', page],
@@ -32,8 +35,10 @@ export default function Notifications() {
     refetchIntervalInBackground: false,
   });
 
-  const invalidate = () =>
+  const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    queryClient.invalidateQueries({ queryKey: ['unreadNotificationsCount'] });
+  };
 
   const markReadMut = useMutation({
     mutationFn: (id) => api.patch(`/notifications/${id}/read`),
@@ -65,7 +70,7 @@ export default function Notifications() {
             )}
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-800 tracking-tight">
+            <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
               Notifications
             </h1>
             <p className="text-sm text-gray-500 mt-0.5">
@@ -79,6 +84,48 @@ export default function Notifications() {
             </p>
           </div>
         </div>
+<<<<<<< HEAD
+=======
+        {items.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Btn
+              variant="outline"
+              onClick={() => setShowDeleteModal(true)}
+              disabled={deleteAllMut.isPending}
+              className="text-red-600"
+            >
+              <span className="flex items-center gap-2">
+                <Trash2 className="w-4 h-4" />
+                {deleteAllMut.isPending ? 'Deleting...' : 'Delete all'}
+              </span>
+            </Btn>
+
+            <Btn
+              variant="outline"
+              onClick={() => markAllReadMut.mutate()}
+              disabled={markAllReadMut.isPending || unread === 0}
+            >
+              <span className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                {markAllReadMut.isPending ? 'Marking...' : 'Mark all read'}
+              </span>
+            </Btn>
+          </div>
+        )}
+        {items.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Btn
+              variant="outline"
+              onClick={handleDeleteAll}
+              disabled={deleteAllMut.isPending}
+              className="text-red-600"
+            >
+              <span className="flex items-center gap-2">
+                <Trash2 className="w-4 h-4" />
+                {deleteAllMut.isPending ? 'Deleting...' : 'Delete all'}
+              </span>
+            </Btn>
+>>>>>>> cc4a5065d074ab76411fd243fa48d7296ee81005
 
         {items.length > 0 && (
           <Btn
@@ -127,7 +174,7 @@ export default function Notifications() {
 
               <div className="flex-1 min-w-0 pt-0.5">
                 <p
-                  className={`text-sm ${n.read ? 'text-gray-700' : 'text-gray-900 font-medium'}`}
+                  className={`text-sm ${n.read ? 'text-gray-700' : 'text-gray-900 dark:text-white font-medium'}`}
                 >
                   {n.message}
                 </p>
@@ -181,6 +228,47 @@ export default function Notifications() {
               Next <ChevronRight className="w-4 h-4" />
             </span>
           </Btn>
+        </div>
+      )}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-4">
+                <Trash2 className="w-8 h-8 text-red-600" />
+              </div>
+
+              <h2 className="text-xl font-semibold text-gray-900">
+                Delete all notifications?
+              </h2>
+
+              <p className="mt-3 text-sm text-gray-500">
+                This action will permanently remove all notifications.
+              </p>
+
+              <p className="mt-1 text-sm font-medium text-red-600">
+                This action cannot be undone.
+              </p>
+
+              <div className="flex gap-3 mt-8 w-full">
+                <Btn
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setShowDeleteModal(false)}
+                >
+                  Cancel
+                </Btn>
+
+                <Btn
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                  onClick={confirmDeleteAll}
+                  disabled={deleteAllMut.isPending}
+                >
+                  {deleteAllMut.isPending ? 'Deleting...' : 'Delete All'}
+                </Btn>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

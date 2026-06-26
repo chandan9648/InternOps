@@ -7,6 +7,8 @@ import {
   Lock,
   CheckCircle2,
   AlertCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import api from '../lib/axios';
 import { Card, Btn, Input, Badge, Spinner } from '../components/ui';
@@ -37,6 +39,9 @@ export default function Profile() {
   const [newPassword, setNewPassword] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['myProfile'],
@@ -240,23 +245,51 @@ export default function Profile() {
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block">
                 Current Password
               </label>
-              <Input
-                type="password"
-                value={oldPassword}
-                onChange={(e) => setOldPassword(e.target.value)}
-                placeholder="Enter current password"
-              />
+              <div className="relative">
+                <Input
+                  type={showOldPassword ? 'text' : 'password'}
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowOldPassword(!showOldPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                >
+                  {showOldPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block">
                 New Password
               </label>
-              <Input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Minimum 8 characters"
-              />
+              <div className="relative">
+                <Input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Minimum 8 characters"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                >
+                  {showNewPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
             <Btn
               variant="success"

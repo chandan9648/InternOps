@@ -119,17 +119,75 @@ export function Btn({
 
 export function Input({ className = '', ...props }) {
   return (
+<<<<<<< HEAD
     <input
       {...props}
       className={`border border-gray-200 rounded-xl px-3 py-2.5 w-full focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition ${className}`}
     />
+=======
+    <div className="relative w-full flex items-center">
+      <input
+        {...props}
+        type={isPassword && showPassword ? 'text' : type}
+        className={`border border-gray-200 rounded-xl px-3 py-2.5 w-full focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
+          isPassword ? 'pr-10' : ''
+        } ${className}`}
+      />
+
+      {/* Renders eye button securely using built-in SVGs */}
+      {isPassword && props.value && props.value.length > 0 && (
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => setShowPassword(!showPassword)}
+          className="absolute right-3 text-gray-400 hover:text-gray-600 focus:outline-none select-none flex items-center justify-center"
+        >
+          {showPassword ? (
+            // EyeOff SVG Icon
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+              <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+              <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+              <line x1="2" y1="2" x2="22" y2="22" />
+            </svg>
+          ) : (
+            // Eye SVG Icon
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          )}
+        </button>
+      )}
+    </div>
+>>>>>>> cc4a5065d074ab76411fd243fa48d7296ee81005
   );
 }
 export function Textarea({ className = '', ...props }) {
   return (
     <textarea
       {...props}
-      className={`border border-gray-200 rounded-xl px-3 py-2.5 w-full focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition ${className}`}
+      className={`border border-gray-200 rounded-xl px-3 py-2.5 w-full focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
     />
   );
 }
@@ -137,7 +195,7 @@ export function Select({ className = '', children, ...props }) {
   return (
     <select
       {...props}
-      className={`border border-gray-200 rounded-xl px-3 py-2.5 w-full bg-white focus:ring-2 focus:ring-indigo-400 outline-none transition ${className}`}
+      className={`border border-gray-200 rounded-xl px-3 py-2.5 w-full bg-white focus:ring-2 focus:ring-indigo-400 outline-none transition disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
     >
       {children}
     </select>

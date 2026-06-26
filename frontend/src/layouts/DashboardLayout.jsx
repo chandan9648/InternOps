@@ -22,8 +22,9 @@ import {
   Menu,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import api from '../lib/axios';
 import { UserAvatar } from '../components/ui';
 import useAuthStore from '../store/auth';
@@ -67,7 +68,7 @@ const nav = [
 ];
 
 const adminNav = [
-  { path: '/admin', label: 'Admin Panel', icon: Settings },
+  { path: '/admin', label: 'users', icon: Settings },
   { path: '/departments', label: 'Departments', icon: Building },
   { path: '/audit', label: 'Audit Log', icon: ClipboardList },
   { path: '/assistant', label: 'AI Assistant', icon: Bot },
@@ -88,6 +89,39 @@ export default function DashboardLayout() {
     () => localStorage.getItem('theme') === 'dark'
   );
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const queryClient = useQueryClient();
+  const token = useAuthStore((s) => s.accessToken);
+
+  const { data: unreadData } = useQuery({
+    queryKey: ['unreadNotificationsCount'],
+    queryFn: () => api.get('/notifications/unread-count').then((r) => r.data),
+    enabled: !!token,
+  });
+
+  const unreadCount = unreadData?.unread || 0;
+
+  useEffect(() => {
+    if (!token) return;
+
+    const socket = io('/', {
+      transports: ['websocket', 'polling'],
+      autoConnect: true,
+    });
+
+    socket.on('connect', () => {
+      socket.emit('authenticate', token);
+    });
+
+    socket.on('notification-received', () => {
+      queryClient.invalidateQueries({ queryKey: ['unreadNotificationsCount'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [token, queryClient]);
 
   const { data: me } = useQuery({
     queryKey: ['myProfile'],
@@ -129,7 +163,7 @@ export default function DashboardLayout() {
         title={collapsed ? n.label : undefined}
         className={`group flex items-center gap-3 rounded-xl text-sm font-medium transition-all
           ${collapsed ? 'justify-center px-0 py-3' : 'px-3 py-2.5'}
-          ${active ? 'bg-white text-indigo-700 shadow-lg shadow-indigo-900/20' : 'text-indigo-100 hover:bg-white/10 hover:translate-x-1'}`}
+          ${active ? 'bg-white text-indigo-700 shadow-lg shadow-indigo-900/20' : 'text-indigo-100 hover:bg-white/15 hover:text-white'}`}
       >
         <Icon className="w-5 h-5 shrink-0" strokeWidth={active ? 2.5 : 2} />
         {!collapsed && <span className="whitespace-nowrap">{n.label}</span>}
@@ -236,9 +270,14 @@ export default function DashboardLayout() {
             </button>
             <Link
               to="/notifications"
-              className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center transition"
+              className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center transition relative"
             >
               <Bell className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white leading-none shadow-sm">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </Link>
             <Link
               to="/profile"

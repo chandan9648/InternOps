@@ -68,6 +68,40 @@ module.exports = async function socialTasksRoutes(fastify) {
     }
   );
 
+<<<<<<< HEAD
+=======
+  fastify.post(
+    '/:id/assign',
+    {
+      schema: { tags: ['Tasks'], description: 'Assign task to interns' },
+      preHandler: [auth, rbac('ADMIN', 'SENIOR_TL')],
+    },
+    async (req, reply) => {
+      const parsed = assignTaskSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: 'Validation failed',
+          details: parsed.error.issues,
+        });
+      }
+      const { userIds } = parsed.data;
+      if (userIds.length > 0) {
+        await repo.assignTask(req.params.id, userIds, req.user.id);
+      }
+
+      req.auditOnResponse = {
+        userId: req.user.id,
+        action: 'TASK_ASSIGNED',
+        resourceType: 'social_task',
+        resourceId: req.params.id,
+        details: { userIds },
+      };
+
+      return { success: true };
+    }
+  );
+
+>>>>>>> cc4a5065d074ab76411fd243fa48d7296ee81005
   // List social tasks (any authenticated user). Optional ?deadlineBefore=ISO date.
   fastify.get(
     '/',

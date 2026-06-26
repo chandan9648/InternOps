@@ -95,7 +95,7 @@ export default function Sessions() {
                 </p>
               </div>
               <Btn
-                variant="outline"
+                variant="danger"
                 onClick={() => revokeMut.mutate(s.sessionId)}
               >
                 Revoke
