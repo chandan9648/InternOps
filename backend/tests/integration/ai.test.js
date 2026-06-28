@@ -101,9 +101,9 @@ describe('AI Chat Integration Tests (#498)', () => {
     });
 
     afterAll(async () => {
-      await app.close();
+      if (app) await app.close();
       const pool = require('../../src/config/db');
-      await pool.end();
+      if (pool) await pool.end();
       delete global.fetch;
     });
 
@@ -157,9 +157,9 @@ describe('AI Chat Integration Tests (#498)', () => {
     });
 
     afterAll(async () => {
-      await app.close();
+      if (app) await app.close();
       const pool = require('../../src/config/db');
-      await pool.end();
+      if (pool) await pool.end();
       delete global.fetch;
     });
 
@@ -240,9 +240,9 @@ describe('AI Chat Integration Tests (#498)', () => {
     });
 
     afterAll(async () => {
-      await app.close();
+      if (app) await app.close();
       const pool = require('../../src/config/db');
-      await pool.end();
+      if (pool) await pool.end();
       delete global.fetch;
     });
 
@@ -306,9 +306,9 @@ describe('AI Chat Integration Tests (#498)', () => {
     });
 
     afterAll(async () => {
-      await app.close();
+      if (app) await app.close();
       const pool = require('../../src/config/db');
-      await pool.end();
+      if (pool) await pool.end();
       delete global.fetch;
     });
 

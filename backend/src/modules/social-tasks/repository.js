@@ -13,9 +13,6 @@ async function createTask({
   );
   return res.rows[0];
 }
-<<<<<<< HEAD
-=======
-
 async function assignTask(taskId, userIds, assignedBy) {
   if (!userIds || userIds.length === 0) return;
   const values = userIds
@@ -26,7 +23,6 @@ async function assignTask(taskId, userIds, assignedBy) {
     [taskId, ...userIds, assignedBy]
   );
 }
->>>>>>> cc4a5065d074ab76411fd243fa48d7296ee81005
 async function getUserEmail(userId) {
   const res = await pool.query('SELECT email FROM users WHERE id = $1', [
     userId,
@@ -131,6 +127,7 @@ async function getProofsByIntern(internId) {
 }
 module.exports = {
   createTask,
+  assignTask,
   getUserEmail,
   isTaskAssignedToUser,
   getTasks,
