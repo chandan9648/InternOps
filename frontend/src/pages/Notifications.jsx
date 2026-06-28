@@ -10,7 +10,13 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import api from '../lib/axios';
-import { Card, Btn, EmptyState, Spinner } from '../components/ui';
+import {
+  Card,
+  Btn,
+  EmptyState,
+  Spinner,
+  ConfirmationModal,
+} from '../components/ui';
 
 function timeAgo(d) {
   const s = Math.floor((Date.now() - new Date(d)) / 1000);
@@ -25,11 +31,15 @@ export default function Notifications() {
   const [page, setPage] = useState(1);
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 >>>>>>> cc4a5065d074ab76411fd243fa48d7296ee81005
 =======
 >>>>>>> 56280d30b55dbd46b90dc834dc811186af5bd3d7
+=======
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+>>>>>>> 5e9eefb1ff8b51a10fa38c9473ffa421a94e8ef5
 
   const { data, isLoading } = useQuery({
     queryKey: ['notifications', page],
@@ -55,6 +65,14 @@ export default function Notifications() {
   const deleteMut = useMutation({
     mutationFn: (id) => api.delete(`/notifications/${id}`),
     onSuccess: invalidate,
+  });
+
+  const deleteAllMut = useMutation({
+    mutationFn: () => api.delete('/notifications/all'),
+    onSuccess: () => {
+      setShowDeleteModal(false);
+      invalidate();
+    },
   });
 
   const items = data?.data || [];
@@ -114,18 +132,28 @@ export default function Notifications() {
 
         {items.length > 0 && (
 <<<<<<< HEAD
+<<<<<<< HEAD
           <div className="flex items-center gap-2">
             <Btn
               variant="outline"
               onClick={handleDeleteAll}
               disabled={deleteAllMut.isPending}
               className="text-red-600"
+=======
+          <div className="flex items-center gap-2">
+            <Btn
+              variant="outline"
+              onClick={() => setShowDeleteModal(true)}
+              disabled={deleteAllMut.isPending}
+              className="rounded-2xl px-5 py-2.5 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+>>>>>>> 5e9eefb1ff8b51a10fa38c9473ffa421a94e8ef5
             >
               <span className="flex items-center gap-2">
                 <Trash2 className="w-4 h-4" />
                 {deleteAllMut.isPending ? 'Deleting...' : 'Delete all'}
               </span>
             </Btn>
+<<<<<<< HEAD
 >>>>>>> cc4a5065d074ab76411fd243fa48d7296ee81005
 
         {items.length > 0 && (
@@ -145,6 +173,21 @@ export default function Notifications() {
               {markAllReadMut.isPending ? 'Marking...' : 'Mark all read'}
             </span>
           </Btn>
+=======
+
+            <Btn
+              variant="outline"
+              onClick={() => markAllReadMut.mutate()}
+              disabled={markAllReadMut.isPending || unread === 0}
+              className="rounded-2xl px-5 py-2.5"
+            >
+              <span className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                {markAllReadMut.isPending ? 'Marking...' : 'Mark all read'}
+              </span>
+            </Btn>
+          </div>
+>>>>>>> 5e9eefb1ff8b51a10fa38c9473ffa421a94e8ef5
         )}
       </div>
 
@@ -252,6 +295,18 @@ export default function Notifications() {
           </Btn>
         </div>
       )}
+
+      <ConfirmationModal
+        open={showDeleteModal}
+        title="Delete all notifications?"
+        message="This action will permanently remove all notifications. This cannot be undone."
+        confirmText="Delete All"
+        cancelText="Cancel"
+        onConfirm={() => deleteAllMut.mutate()}
+        onCancel={() => setShowDeleteModal(false)}
+        loading={deleteAllMut.isPending}
+        danger={true}
+      />
     </div>
   );
 }
