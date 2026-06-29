@@ -108,8 +108,21 @@ app.register(require('@fastify/rate-limit'), {
 
 app.register(require('@fastify/cookie'));
 
-const { csrfMiddleware } = require('./middleware/csrf');
-app.addHook('onRequest', csrfMiddleware);
+// --- Global lifecycle hooks registered before module routes for deterministic ordering ---
+app.addHook('onRequest', metrics.trackActiveRequests);
+
+app.addHook('onRequest', async (request) => {
+  request.log.info(
+    {
+      reqId: request.id,
+      method: request.method,
+      url: request.url,
+    },
+    'incoming'
+  );
+});
+
+app.addHook('onRequest', require('./middleware/csrf').csrfMiddleware);
 
 app.register(require('@fastify/multipart'), {
   limits: {
@@ -157,19 +170,6 @@ app.register(require('./modules/reports/routes'), { prefix: '/api/reports' });
 app.register(require('./modules/reports/export'), { prefix: '/api/reports/export' });
 app.register(require('./modules/ai/routes'), { prefix: '/api/ai' });
 app.register(require('./modules/uptoskills/routes'), { prefix: '/api/uptoskills' });
-
-app.addHook('onRequest', metrics.trackActiveRequests);
-
-app.addHook('onRequest', async (request) => {
-  request.log.info(
-    {
-      reqId: request.id,
-      method: request.method,
-      url: request.url,
-    },
-    'incoming'
-  );
-});
 
 app.addHook('onResponse', async (request) => {
   if (!request?.auditOnResponse) return;
