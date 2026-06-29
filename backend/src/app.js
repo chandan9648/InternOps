@@ -6,6 +6,8 @@ const config = require('./config');
 const pool = require('./config/db');
 const metrics = require('./utils/metrics');
 const { initializeWebSocket } = require('./websocket');
+const { getRedisStatus } = require('./config/redis');
+const { createAuditLog } = require('./utils/audit');
 
 const app = Fastify({
   trustProxy:
@@ -25,6 +27,77 @@ app.register(require('@fastify/cors'), {
 });
 
 app.register(require('@fastify/helmet'));
+
+// --- Monitoring and Health Routes (Registered before rate limit to avoid being blocked) ---
+app.get('/', async (req, reply) => {
+  reply.redirect('/docs');
+});
+
+app.get('/fallback', async (req, reply) => {
+  reply.type('text/html').send(`
+    <html>
+      <body style="font-family:sans-serif;padding:2em">
+        <h1>InternOps API</h1>
+        <a href="/docs">Swagger Docs</a>
+      </body>
+    </html>
+  `);
+});
+
+app.get('/metrics', metrics.metricsEndpoint);
+
+app.get('/health', async (req, reply) => {
+  const redisStatus = getRedisStatus();
+
+  if (process.env.NODE_ENV === 'test') {
+    return reply.send({ status: 'ok' });
+  }
+
+  if (redisStatus === 'disconnected') {
+    return reply
+      .status(503)
+      .send({ status: 'degraded', redis: 'disconnected' });
+  }
+
+  return reply.send({ status: 'ok' });
+});
+
+app.get('/health/db', async (req, reply) => {
+  try {
+    await pool.query('SELECT 1');
+    reply.send({
+      status: 'ok',
+      db: 'connected',
+    });
+  } catch {
+    reply.status(503).send({
+      status: 'error',
+      db: 'disconnected',
+    });
+  }
+});
+
+app.get('/health/full', async (req, reply) => {
+  const checks = { db: false, redis: false };
+
+  try {
+    await pool.query('SELECT 1');
+    checks.db = true;
+  } catch {}
+
+  const redisStatus = getRedisStatus();
+
+  checks.redis =
+    process.env.NODE_ENV === 'test' ||
+    redisStatus === 'connected' ||
+    redisStatus === 'disabled';
+
+  const healthy = checks.db && checks.redis;
+
+  reply
+    .status(healthy ? 200 : 503)
+    .send({ status: healthy ? 'healthy' : 'degraded', checks });
+});
 
 //  Register once globally — no Redis dependency
 app.register(require('@fastify/rate-limit'), {
@@ -64,153 +137,26 @@ if (process.env.NODE_ENV !== 'test') {
   });
 }
 
-app.register(require('./modules/auth/routes'), {
-  prefix: '/api/auth',
-});
-
-app.register(require('./modules/users/routes'), {
-  prefix: '/api/users',
-});
-
-app.register(require('./modules/departments/routes'), {
-  prefix: '/api/departments',
-});
-
-app.register(require('./modules/hierarchy/routes'), {
-  prefix: '/api/hierarchy',
-});
-
-app.register(require('./modules/team/routes'), {
-  prefix: '/api/team',
-});
-
-app.register(require('./modules/attendance/routes'), {
-  prefix: '/api/attendance',
-});
-
-app.register(require('./modules/ratings/routes'), {
-  prefix: '/api/ratings',
-});
-
-app.register(require('./modules/social-tasks/routes'), {
-  prefix: '/api/tasks',
-});
-
-app.register(require('./modules/proof-submissions/routes'), {
-  prefix: '/api/proofs',
-});
-
-app.register(require('./modules/notifications/routes'), {
-  prefix: '/api/notifications',
-});
-
-app.register(require('./modules/audit/routes'), {
-  prefix: '/api/audit',
-});
-
-app.register(require('./modules/uploads/routes'), {
-  prefix: '/api/uploads',
-});
-
-app.register(require('./modules/analytics/routes'), {
-  prefix: '/api/analytics',
-});
-
-app.register(require('./modules/meetings/routes'), {
-  prefix: '/api/meetings',
-});
-
-app.register(require('./modules/sessions/routes'), {
-  prefix: '/api/sessions',
-});
-
-app.register(require('./modules/reports/routes'), {
-  prefix: '/api/reports',
-});
-
-app.register(require('./modules/reports/export'), {
-  prefix: '/api/reports/export',
-});
-
-app.register(require('./modules/ai/routes'), {
-  prefix: '/api/ai',
-});
-
-app.register(require('./modules/uptoskills/routes'), {
-  prefix: '/api/uptoskills',
-});
-
-app.get('/', async (req, reply) => {
-  reply.redirect('/docs');
-});
-
-app.get('/fallback', async (req, reply) => {
-  reply.type('text/html').send(`
-    <html>
-      <body style="font-family:sans-serif;padding:2em">
-        <h1>InternOps API</h1>
-        <a href="/docs">Swagger Docs</a>
-      </body>
-    </html>
-  `);
-});
-
-app.get('/metrics', metrics.metricsEndpoint);
-
-app.get('/health', async (req, reply) => {
-  const { getRedisStatus } = require('./config/redis');
-  const redisStatus = getRedisStatus();
-
-  if (process.env.NODE_ENV === 'test') {
-    return reply.send({ status: 'ok' });
-  }
-
-  if (redisStatus === 'disconnected') {
-    return reply
-      .status(503)
-      .send({ status: 'degraded', redis: 'disconnected' });
-  }
-
-  return reply.send({ status: 'ok' });
-});
-
-app.get('/health/db', async (req, reply) => {
-  try {
-    await pool.query('SELECT 1');
-    reply.send({
-      status: 'ok',
-      db: 'connected',
-    });
-  } catch {
-    reply.status(503).send({
-      status: 'error',
-      db: 'disconnected',
-    });
-  }
-});
-
-app.get('/health/full', async (req, reply) => {
-  const checks = { db: false, redis: false };
-
-  try {
-    await pool.query('SELECT 1');
-    checks.db = true;
-  } catch {}
-
-  const { getRedisStatus } = require('./config/redis');
-  const redisStatus = getRedisStatus();
-
-  checks.redis =
-    process.env.NODE_ENV === 'test' ||
-    redisStatus === 'connected' ||
-    redisStatus === 'disabled';
-
-  const healthy = checks.db && checks.redis;
-
-  reply
-    .status(healthy ? 200 : 503)
-    .send({ status: healthy ? 'healthy' : 'degraded', checks });
-});
+// Module Registrations exclusively using inline require statements
+app.register(require('./modules/auth/routes'), { prefix: '/api/auth' });
+app.register(require('./modules/users/routes'), { prefix: '/api/users' });
+app.register(require('./modules/departments/routes'), { prefix: '/api/departments' });
+app.register(require('./modules/hierarchy/routes'), { prefix: '/api/hierarchy' });
+app.register(require('./modules/team/routes'), { prefix: '/api/team' });
+app.register(require('./modules/attendance/routes'), { prefix: '/api/attendance' });
+app.register(require('./modules/ratings/routes'), { prefix: '/api/ratings' });
+app.register(require('./modules/social-tasks/routes'), { prefix: '/api/tasks' });
+app.register(require('./modules/proof-submissions/routes'), { prefix: '/api/proofs' });
+app.register(require('./modules/notifications/routes'), { prefix: '/api/notifications' });
+app.register(require('./modules/audit/routes'), { prefix: '/api/audit' });
+app.register(require('./modules/uploads/routes'), { prefix: '/api/uploads' });
+app.register(require('./modules/analytics/routes'), { prefix: '/api/analytics' });
+app.register(require('./modules/meetings/routes'), { prefix: '/api/meetings' });
+app.register(require('./modules/sessions/routes'), { prefix: '/api/sessions' });
+app.register(require('./modules/reports/routes'), { prefix: '/api/reports' });
+app.register(require('./modules/reports/export'), { prefix: '/api/reports/export' });
+app.register(require('./modules/ai/routes'), { prefix: '/api/ai' });
+app.register(require('./modules/uptoskills/routes'), { prefix: '/api/uptoskills' });
 
 app.addHook('onRequest', metrics.trackActiveRequests);
 
@@ -226,9 +172,8 @@ app.addHook('onRequest', async (request) => {
 });
 
 app.addHook('onResponse', async (request) => {
-  if (!request.auditOnResponse) return;
+  if (!request?.auditOnResponse) return;
 
-  const { createAuditLog } = require('./utils/audit');
   try {
     await createAuditLog(request.auditOnResponse);
   } catch (err) {
