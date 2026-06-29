@@ -10,7 +10,7 @@ async function routes(fastify) {
     return repo.getUserSessions(req.user.id);
   });
 
-  // Revoke a specific session
+  // Revoke a specific session (atomic ownership check + revoke)
   fastify.delete(
     '/me/:sessionId',
     { preHandler: [auth, sessionOwnership('sessionId')] },
