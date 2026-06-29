@@ -101,11 +101,11 @@ afterAll(async () => {
     await resetSeededAdminPassword();
   } catch {
     /* best-effort cleanup */
-  } finally {
-    // Close the app AFTER all cleanup is complete
-    await app.close();
   }
+  // Do NOT close the shared app singleton here – other test files that
+  // run after this one will call app.ready() and hang. --forceExit handles cleanup.
 });
+
 
 function authHeaders() {
   return {

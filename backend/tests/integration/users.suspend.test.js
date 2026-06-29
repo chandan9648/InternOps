@@ -178,7 +178,8 @@ afterAll(async () => {
   } catch {
     /* best-effort cleanup */
   }
-  await app.close();
+  // Do NOT close the shared app singleton here – other test files that
+  // run after this one will call app.ready() and hang. --forceExit handles cleanup.
 });
 
 // ---------------------------------------------------------------------------

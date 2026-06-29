@@ -7,7 +7,7 @@ describe('Health Check Integration Tests', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    // Do NOT close the shared app singleton here – --forceExit handles cleanup.
   });
 
   describe('GET /health', () => {

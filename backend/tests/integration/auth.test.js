@@ -58,7 +58,11 @@ function updateCookieJar(res) {
 
 afterAll(async () => {
   await resetSeededAdminPassword();
-  await app.close();
+  // Do NOT call app.close() here – all integration test files share the
+  // same module-cached Fastify singleton. Closing it here causes every
+  // subsequent test file's `app.ready()` to hang until the 15 s hook
+  // timeout fires, failing all their tests. Cleanup is handled by
+  // --forceExit and globalTeardown.
 });
 
 // Clear brute-force state before each test so failed login attempts in one
@@ -425,7 +429,7 @@ describe('Auth Integration Tests', () => {
       });
       expect(lockedRes.statusCode).toBe(429);
       expect(JSON.parse(lockedRes.body).error).toContain('locked');
-    });
+    }, 30000);
 
     it('should rotate CSRF session on login and reject token bound to another user', async () => {
       // 1. Get anonymous CSRF session
