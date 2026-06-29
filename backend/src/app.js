@@ -1,4 +1,7 @@
 require('dotenv').config();
+const validateEnv = require('./config/validateEnv');
+validateEnv();
+
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const Fastify = require('fastify');
@@ -10,8 +13,7 @@ const { getRedisStatus } = require('./config/redis');
 const { createAuditLog } = require('./utils/audit');
 
 const app = Fastify({
-  trustProxy:
-    config.nodeEnv === 'production' ? [config.trustedProxyCidr] : 'loopback',
+  trustProxy: config.nodeEnv === 'production' ? true : 'loopback',
   logger:
     config.nodeEnv === 'development'
       ? { transport: { target: 'pino-pretty' } }
