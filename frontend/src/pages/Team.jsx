@@ -174,7 +174,7 @@ function Field({ label, children }) {
 
 function AddMemberModal({ onClose }) {
   const queryClient = useQueryClient();
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const allowedRoles = rolesBelow(user?.role);
 
   const [form, setForm] = useState({
@@ -588,7 +588,7 @@ function Row({ label, value }) {
 
 function MemberDetail({ memberId, onClose }) {
   const queryClient = useQueryClient();
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
 
   const [form, setForm] = useState(null);
   const [edit, setEdit] = useState(false);
@@ -1126,7 +1126,7 @@ export default function Team() {
   const [selected, setSelected] = useState(null);
   const [adding, setAdding] = useState(false);
 
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const canAdd = rolesBelow(user?.role).length > 0;
 
   const {
