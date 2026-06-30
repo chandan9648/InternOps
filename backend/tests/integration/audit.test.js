@@ -25,6 +25,11 @@ describe('Audit Integration Tests', () => {
 
   let adminUserId;
 
+  // Track seeded log IDs so tests can find the exact rows they care about
+  const seededAdminLogId = uuidv4();
+  const seededInternLogId = uuidv4();
+  const seededSystemLogId = uuidv4();
+
   beforeAll(async () => {
     await app.ready();
     await resetSeededAdminPassword();
@@ -44,62 +49,63 @@ describe('Audit Integration Tests', () => {
       [internId, internEmail, internHash]
     );
 
-    // Insert some mock audit logs
-    // 1. Admin login action
+    // Insert mock audit logs with known IDs so tests can find exact rows
+    // Use a unique action prefix 'AUDIT_TEST_' to distinguish from real login logs
     await pool.query(
       `INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, ip_address, user_agent, details)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
-        uuidv4(),
+        seededAdminLogId,
         adminUserId,
-        'LOGIN',
+        'AUDIT_TEST_LOGIN',
         'auth',
         adminUserId,
         '192.168.1.1',
         'Mozilla/5.0',
-        JSON.stringify({ admin: true }),
+        JSON.stringify({ seeded: true }),
       ]
     );
 
-    // 2. Intern login action
     await pool.query(
       `INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, ip_address, user_agent, details)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
-        uuidv4(),
+        seededInternLogId,
         internId,
-        'LOGIN',
+        'AUDIT_TEST_LOGIN',
         'auth',
         internId,
         '10.0.0.1',
         'Chrome/100',
-        JSON.stringify({ intern: true }),
+        JSON.stringify({ seeded: true }),
       ]
     );
 
-    // 3. System action (null user_id)
     await pool.query(
       `INSERT INTO audit_logs (id, user_id, action, resource_type, resource_id, ip_address, user_agent, details)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
-        uuidv4(),
+        seededSystemLogId,
         null,
-        'SYSTEM_UPDATE',
+        'AUDIT_TEST_SYSTEM_UPDATE',
         'system',
         null,
         '127.0.0.1',
         'InternOpsCron',
-        JSON.stringify({ task: 'cleanup' }),
+        JSON.stringify({ seeded: true }),
       ]
     );
 
-    // Login Admin to get token/cookies
+    // Login Admin
     const adminCsrfRes = await app.inject({
       method: 'GET',
       url: '/api/auth/csrf-token',
     });
     adminCsrfToken = JSON.parse(adminCsrfRes.body).csrfToken;
-    mergeCookies(adminCookies, parseSetCookie(adminCsrfRes.headers['set-cookie']));
+    mergeCookies(
+      adminCookies,
+      parseSetCookie(adminCsrfRes.headers['set-cookie'])
+    );
     mergeCookies(adminCookies, adminCsrfRes.cookies);
 
     const adminLoginRes = await app.inject({
@@ -116,15 +122,21 @@ describe('Audit Integration Tests', () => {
       },
     });
     adminToken = JSON.parse(adminLoginRes.body).accessToken;
-    mergeCookies(adminCookies, parseSetCookie(adminLoginRes.headers['set-cookie']));
+    mergeCookies(
+      adminCookies,
+      parseSetCookie(adminLoginRes.headers['set-cookie'])
+    );
 
-    // Login Intern to get token/cookies
+    // Login Intern
     const internCsrfRes = await app.inject({
       method: 'GET',
       url: '/api/auth/csrf-token',
     });
     internCsrfToken = JSON.parse(internCsrfRes.body).csrfToken;
-    mergeCookies(internCookies, parseSetCookie(internCsrfRes.headers['set-cookie']));
+    mergeCookies(
+      internCookies,
+      parseSetCookie(internCsrfRes.headers['set-cookie'])
+    );
     mergeCookies(internCookies, internCsrfRes.cookies);
 
     const internLoginRes = await app.inject({
@@ -141,23 +153,24 @@ describe('Audit Integration Tests', () => {
       },
     });
     internToken = JSON.parse(internLoginRes.body).accessToken;
-    mergeCookies(internCookies, parseSetCookie(internLoginRes.headers['set-cookie']));
+    mergeCookies(
+      internCookies,
+      parseSetCookie(internLoginRes.headers['set-cookie'])
+    );
   });
 
-afterAll(async () => {
-  // Cleanup - ensure all queries complete before closing app
-  try {
-    await pool.query(
-      'DELETE FROM audit_logs WHERE user_id = $1 OR user_id = $2 OR (user_id IS NULL AND action = $3)',
-      [adminUserId, internId, 'SYSTEM_UPDATE']
-    );
+  afterAll(async () => {
+    // Only delete the rows we explicitly inserted — don't touch real login audit logs
+    await pool.query('DELETE FROM audit_logs WHERE id IN ($1, $2, $3)', [
+      seededAdminLogId,
+      seededInternLogId,
+      seededSystemLogId,
+    ]);
     await pool.query('DELETE FROM users WHERE id = $1', [internId]);
-  } catch (error) {
-    console.error('Cleanup error:', error);
-  } finally {
     await app.close();
-  }
-});
+  });
+
+  // ─── Authentication ────────────────────────────────────────────────────────
 
   describe('GET /api/audit authentication', () => {
     it('should reject unauthenticated request', async () => {
@@ -169,36 +182,45 @@ afterAll(async () => {
     });
   });
 
+  // ─── Admin ─────────────────────────────────────────────────────────────────
+
   describe('GET /api/audit as Admin', () => {
-    it('should return all audit logs with pagination', async () => {
+    it('should return all audit logs with pagination metadata', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/audit',
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-        },
+        headers: { Authorization: `Bearer ${adminToken}` },
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
       expect(body.data).toBeDefined();
+      expect(Array.isArray(body.data)).toBe(true);
+      // At least our 3 seeded rows plus real login logs
       expect(body.total).toBeGreaterThanOrEqual(3);
       expect(body.page).toBe(1);
       expect(body.limit).toBe(50);
-
-      // Verify that ip_address and user_agent are NOT stripped for admin
-      const internLog = body.data.find((log) => log.user_id === internId);
-      expect(internLog).toBeDefined();
-      expect(internLog.ip_address).toBe('10.0.0.1');
-      expect(internLog.user_agent).toBe('Chrome/100');
     });
 
-    it('should support pagination limit query parameters', async () => {
+    it('should not strip ip_address or user_agent for admin', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/audit?userId=${internId}`,
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      // Find our specific seeded row by ID — not just any intern row
+      const seededLog = body.data.find((log) => log.id === seededInternLogId);
+      expect(seededLog).toBeDefined();
+      expect(seededLog.ip_address).toBe('10.0.0.1');
+      expect(seededLog.user_agent).toBe('Chrome/100');
+    });
+
+    it('should support pagination parameters', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/audit?limit=2&page=1',
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-        },
+        headers: { Authorization: `Bearer ${adminToken}` },
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
@@ -207,112 +229,199 @@ afterAll(async () => {
       expect(body.page).toBe(1);
     });
 
-    it('should cap pagination limit at 100', async () => {
+    it('should reject limit over 100', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/audit?limit=200',
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-        },
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('should accept limit of exactly 100', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/audit?limit=100',
+        headers: { Authorization: `Bearer ${adminToken}` },
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
       expect(body.limit).toBe(100);
     });
 
-    it('should reject invalid query parameters', async () => {
+    it('should reject non-numeric limit', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/audit?limit=abc',
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-        },
+        headers: { Authorization: `Bearer ${adminToken}` },
       });
       expect(res.statusCode).toBe(400);
     });
 
-    it('should filter by userId', async () => {
+    it('should reject page less than 1', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/audit?page=0',
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it("should filter by userId and only return that user's logs", async () => {
       const res = await app.inject({
         method: 'GET',
         url: `/api/audit?userId=${internId}`,
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-        },
+        headers: { Authorization: `Bearer ${adminToken}` },
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
+      // Every returned row must belong to the intern
       expect(body.data.every((log) => log.user_id === internId)).toBe(true);
-      expect(body.total).toBe(1);
+      // Must include at least our seeded row
+      const seededLog = body.data.find((log) => log.id === seededInternLogId);
+      expect(seededLog).toBeDefined();
+    });
+
+    it('should reject invalid UUID for userId', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/audit?userId=not-a-uuid',
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      expect(res.statusCode).toBe(400);
     });
 
     it('should filter by resourceType', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/audit?resourceType=system',
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-        },
+        headers: { Authorization: `Bearer ${adminToken}` },
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      expect(body.data.every((log) => log.resource_type === 'system')).toBe(true);
+      expect(body.data.every((log) => log.resource_type === 'system')).toBe(
+        true
+      );
+      // Must include our seeded system log
+      const seededLog = body.data.find((log) => log.id === seededSystemLogId);
+      expect(seededLog).toBeDefined();
+    });
+
+    it('should return empty data array when no logs match filters', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/audit?resourceType=nonexistent_type_xyz',
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.data).toEqual([]);
+      expect(body.total).toBe(0);
+    });
+
+    it('should combine userId and resourceType filters', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/audit?userId=${internId}&resourceType=auth`,
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(
+        body.data.every(
+          (log) => log.user_id === internId && log.resource_type === 'auth'
+        )
+      ).toBe(true);
+      // Our seeded intern log is resource_type=auth, so it must be present
+      const seededLog = body.data.find((log) => log.id === seededInternLogId);
+      expect(seededLog).toBeDefined();
     });
   });
 
+  // ─── Non-Admin (Intern) ────────────────────────────────────────────────────
+
   describe('GET /api/audit as Non-Admin (Intern)', () => {
-    it('should only return the intern\'s own audit logs', async () => {
+    it("should only return the intern's own audit logs", async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/audit',
-        headers: {
-          Authorization: `Bearer ${internToken}`,
-        },
+        headers: { Authorization: `Bearer ${internToken}` },
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
+      // Every row must belong to intern — no other user's logs
       expect(body.data.every((log) => log.user_id === internId)).toBe(true);
-      expect(body.total).toBe(1);
+      // Our seeded row must be present
+      const seededLog = body.data.find((log) => log.id === seededInternLogId);
+      expect(seededLog).toBeDefined();
     });
 
-    it('should coerce/overwrite userId parameter to own ID if specified', async () => {
+    it('should ignore userId param for non-admins and always return only own logs', async () => {
       const res = await app.inject({
         method: 'GET',
         url: `/api/audit?userId=${adminUserId}`,
-        headers: {
-          Authorization: `Bearer ${internToken}`,
-        },
+        headers: { Authorization: `Bearer ${internToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      // Must never contain admin logs
+      expect(body.data.every((log) => log.user_id === internId)).toBe(true);
+      expect(body.data.some((log) => log.user_id === adminUserId)).toBe(false);
+    });
+
+    it("should not strip ip_address or user_agent from intern's own seeded log", async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/audit',
+        headers: { Authorization: `Bearer ${internToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      // Look up the specific seeded row by its known ID, not just any intern log
+      const seededLog = body.data.find((log) => log.id === seededInternLogId);
+      expect(seededLog).toBeDefined();
+      expect(seededLog.ip_address).toBe('10.0.0.1');
+      expect(seededLog.user_agent).toBe('Chrome/100');
+    });
+
+    it('should allow intern to filter their own logs by resourceType', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/audit?resourceType=auth',
+        headers: { Authorization: `Bearer ${internToken}` },
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
       expect(body.data.every((log) => log.user_id === internId)).toBe(true);
-      expect(body.total).toBe(1);
+      expect(body.data.every((log) => log.resource_type === 'auth')).toBe(true);
+      const seededLog = body.data.find((log) => log.id === seededInternLogId);
+      expect(seededLog).toBeDefined();
     });
 
-    it('should strip ip_address and user_agent for non-matching entries', async () => {
-      // Inject a temporary row with user_id different from intern but return it anyway
-      // to test sanitization. But wait! Since GET /api/audit enforces al.user_id = internId
-      // for intern, we can temporarily mock req.user.role to test sanitization in isolation,
-      // or we can test sanitization on system logs (user_id IS NULL) which can be returned
-      // if we bypass the filter. Wait! Does intern get system logs (user_id = null)?
-      // No, because al.user_id = internId filter blocks user_id IS NULL entries.
-      // So if a non-admin gets entries, all of them will have user_id = internId.
-      // However, what if a log entry belongs to someone else but is returned in the future?
-      // Our handler code has:
-      // if (req.user.role !== 'ADMIN' && row.user_id !== req.user.id) { ... }
-      // Let's verify that for their own entry, ownLog.ip_address and ownLog.user_agent are NOT stripped.
+    it('should return empty results when intern filters by a resourceType with no own logs', async () => {
       const res = await app.inject({
         method: 'GET',
-        url: '/api/audit',
-        headers: {
-          Authorization: `Bearer ${internToken}`,
-        },
+        url: '/api/audit?resourceType=system',
+        headers: { Authorization: `Bearer ${internToken}` },
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      const ownLog = body.data.find((log) => log.user_id === internId);
-      expect(ownLog).toBeDefined();
-      expect(ownLog.ip_address).toBe('10.0.0.1');
-      expect(ownLog.user_agent).toBe('Chrome/100');
+      // System log has user_id = null — intern must not see it
+      expect(body.data).toEqual([]);
+      expect(body.total).toBe(0);
+    });
+
+    it('should support pagination for non-admin users', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/audit?limit=10&page=1',
+        headers: { Authorization: `Bearer ${internToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.page).toBe(1);
+      expect(body.limit).toBe(10);
+      expect(body.data.every((log) => log.user_id === internId)).toBe(true);
     });
   });
 });
