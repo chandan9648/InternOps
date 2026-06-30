@@ -29,17 +29,7 @@ function timeAgo(d) {
 export default function Notifications() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
   const [showDeleteModal, setShowDeleteModal] = useState(false);
->>>>>>> cc4a5065d074ab76411fd243fa48d7296ee81005
-=======
->>>>>>> 56280d30b55dbd46b90dc834dc811186af5bd3d7
-=======
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
->>>>>>> 5e9eefb1ff8b51a10fa38c9473ffa421a94e8ef5
 
   const { data, isLoading } = useQuery({
     queryKey: ['notifications', page],
@@ -111,69 +101,20 @@ export default function Notifications() {
             </p>
           </div>
         </div>
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-        {items.length > 0 && (
-          <div className="flex items-center gap-2">
-            <Btn
-              variant="outline"
-              onClick={() => setShowDeleteModal(true)}
-              disabled={deleteAllMut.isPending}
-              className="text-red-600"
-            >
-              <span className="flex items-center gap-2">
-                <Trash2 className="w-4 h-4" />
-                {deleteAllMut.isPending ? 'Deleting...' : 'Delete all'}
-              </span>
-            </Btn>
-=======
->>>>>>> 56280d30b55dbd46b90dc834dc811186af5bd3d7
 
         {items.length > 0 && (
-<<<<<<< HEAD
-<<<<<<< HEAD
-          <div className="flex items-center gap-2">
-            <Btn
-              variant="outline"
-              onClick={handleDeleteAll}
-              disabled={deleteAllMut.isPending}
-              className="text-red-600"
-=======
           <div className="flex items-center gap-2">
             <Btn
               variant="outline"
               onClick={() => setShowDeleteModal(true)}
               disabled={deleteAllMut.isPending}
               className="rounded-2xl px-5 py-2.5 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
->>>>>>> 5e9eefb1ff8b51a10fa38c9473ffa421a94e8ef5
             >
               <span className="flex items-center gap-2">
                 <Trash2 className="w-4 h-4" />
                 {deleteAllMut.isPending ? 'Deleting...' : 'Delete all'}
               </span>
             </Btn>
-<<<<<<< HEAD
->>>>>>> cc4a5065d074ab76411fd243fa48d7296ee81005
-
-        {items.length > 0 && (
-=======
->>>>>>> 56280d30b55dbd46b90dc834dc811186af5bd3d7
-          <Btn
-            variant="outline"
-            onClick={() => markAllReadMut.mutate()}
-            disabled={markAllReadMut.isPending || unread === 0}
-<<<<<<< HEAD
-=======
-            className="rounded-2xl px-5 py-2.5"
->>>>>>> 56280d30b55dbd46b90dc834dc811186af5bd3d7
-          >
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4" />
-              {markAllReadMut.isPending ? 'Marking...' : 'Mark all read'}
-            </span>
-          </Btn>
-=======
 
             <Btn
               variant="outline"
@@ -187,7 +128,6 @@ export default function Notifications() {
               </span>
             </Btn>
           </div>
->>>>>>> 5e9eefb1ff8b51a10fa38c9473ffa421a94e8ef5
         )}
       </div>
 
