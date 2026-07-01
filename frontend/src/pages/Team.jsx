@@ -225,10 +225,6 @@ function AddMemberModal({ onClose }) {
 
   const submit = (e) => {
     e.preventDefault();
-<<<<<<< HEAD
-=======
-
->>>>>>> 56280d30b55dbd46b90dc834dc811186af5bd3d7
     const payload = Object.fromEntries(
       Object.entries(form).filter(([, v]) => v !== '')
     );
@@ -279,46 +275,6 @@ function AddMemberModal({ onClose }) {
             &times;
           </button>
         </div>
-<<<<<<< HEAD
-        <form onSubmit={submit} className="p-5 space-y-3">
-          {error && (
-            <p className="text-red-700 bg-red-50 px-3 py-2 rounded">{error}</p>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Full name">
-              <input
-                className="border p-2 w-full rounded-lg"
-                value={form.full_name}
-                onChange={(e) =>
-                  setForm({ ...form, full_name: e.target.value })
-                }
-              />
-            </Field>
-            <Field label="Role *">
-              <select
-                className="border p-2 w-full rounded-lg"
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value })}
-              >
-                {allowedRoles.map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_LABEL[r]}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Email *">
-              <input
-                type="email"
-                required
-                className="border p-2 w-full rounded-lg"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-              />
-            </Field>
-            <Field label="Temp password * (min 8)">
-              <div className="relative">
-=======
 
         <form onSubmit={submit} className="min-h-0 flex-1 flex flex-col">
           {/* Scrollable body */}
@@ -331,7 +287,6 @@ function AddMemberModal({ onClose }) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field label="Full name">
->>>>>>> 56280d30b55dbd46b90dc834dc811186af5bd3d7
                 <input
                   className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white p-3 w-full rounded-2xl focus:ring-2 focus:ring-indigo-400/50 outline-none"
                   value={form.full_name}

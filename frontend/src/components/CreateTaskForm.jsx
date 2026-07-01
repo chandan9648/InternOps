@@ -97,14 +97,6 @@ export default function CreateTaskForm() {
             disabled={createMutation.isPending}
           />
         </div>
-<<<<<<< HEAD
-        <Input
-          type="url"
-          placeholder="Task link (https://…)"
-          value={form.taskLink}
-          onChange={(e) => setForm({ ...form, taskLink: e.target.value })}
-        />
-=======
 
         <div>
           <label className="text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 block">
@@ -163,7 +155,6 @@ export default function CreateTaskForm() {
           />
         </div>
 
->>>>>>> 56280d30b55dbd46b90dc834dc811186af5bd3d7
         <Btn
           variant="primary"
           type="submit"
