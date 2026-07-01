@@ -83,8 +83,6 @@ module.exports = async function socialTasksRoutes(fastify) {
     }
   );
 
-<<<<<<< HEAD
-=======
   fastify.post(
     '/:id/assign',
     {
@@ -116,7 +114,6 @@ module.exports = async function socialTasksRoutes(fastify) {
     }
   );
 
->>>>>>> cc4a5065d074ab76411fd243fa48d7296ee81005
   // List social tasks (any authenticated user). Optional ?deadlineBefore=ISO date.
   fastify.get(
     '/',

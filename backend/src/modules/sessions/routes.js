@@ -2,12 +2,8 @@ const auth = require('../../middleware/auth');
 const rbac = require('../../middleware/rbac');
 const repo = require('./repository');
 const { createAuditLog, extractRequestInfo } = require('../../utils/audit');
-<<<<<<< HEAD
-const sessionOwnership = require('../../middleware/sessionOwnership');
-=======
 const { z } = require('zod');
 const { toSchema } = require('../../utils/schemaHelper');
->>>>>>> be02bc9d7e2ee1b28bf2efb9e3d234855e03ab2a
 
 async function routes(fastify) {
   // List own sessions
@@ -25,9 +21,6 @@ async function routes(fastify) {
   // Revoke a specific session (atomic ownership check + revoke)
   fastify.delete(
     '/me/:sessionId',
-<<<<<<< HEAD
-    { preHandler: [auth, sessionOwnership('sessionId')] },
-=======
     {
       schema: {
         tags: ['Sessions'],
@@ -36,7 +29,6 @@ async function routes(fastify) {
       },
       preHandler: [auth],
     },
->>>>>>> be02bc9d7e2ee1b28bf2efb9e3d234855e03ab2a
     async (req, reply) => {
       const success = await repo.revokeSession(
         req.params.sessionId,
@@ -56,20 +48,6 @@ async function routes(fastify) {
   );
 
   // Revoke all other sessions
-<<<<<<< HEAD
-  fastify.post('/me/revoke-all', { preHandler: [auth] }, async (req, reply) => {
-    await repo.revokeAllUserSessions(req.user.id);
-    const { rotateAndSetCsrf } = require('../../middleware/csrf');
-    rotateAndSetCsrf(req, reply, null);
-    req.auditOnResponse = {
-      userId: req.user.id,
-      action: 'ALL_SESSIONS_REVOKED',
-      resourceType: 'session',
-      ...extractRequestInfo(req),
-    };
-    return { message: 'All sessions revoked. Please re-login.' };
-  });
-=======
   fastify.post(
     '/me/revoke-all',
     {
@@ -88,7 +66,6 @@ async function routes(fastify) {
       return { message: 'All sessions revoked. Please re-login.' };
     }
   );
->>>>>>> be02bc9d7e2ee1b28bf2efb9e3d234855e03ab2a
 
   // Admin: revoke all sessions of a specific user
   fastify.post(

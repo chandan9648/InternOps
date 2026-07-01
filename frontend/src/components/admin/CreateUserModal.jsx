@@ -208,143 +208,17 @@ export default function CreateUserModal({ open, onClose }) {
         </div>
 
         {/* Form */}
-<<<<<<< HEAD
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-          {error && (
-            <div className="bg-error/10 border border-error/40 text-error text-sm rounded-lg px-4 py-2.5 animate-fade-in">
-              {error}
-            </div>
-          )}
-
-          {successMsg && (
-            <div className="bg-success/10 border border-success/40 text-brand-green text-sm rounded-lg px-4 py-2.5 animate-fade-in">
-              {successMsg}
-            </div>
-          )}
-
-          {/* Full Name */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider">
-              Full Name
-            </label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-              <input
-                type="text"
-                required
-                placeholder="John Doe"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-brand-green focus:ring-2 focus:ring-brand-green/30 outline-none transition text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Email */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider">
-              Email Address
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-              <input
-                type="email"
-                required
-                placeholder="johndoe@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-brand-green focus:ring-2 focus:ring-brand-green/30 outline-none transition text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Temporary Password */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider">
-              Temporary Password
-            </label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                required
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-12 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-brand-green focus:ring-2 focus:ring-brand-green/30 outline-none transition text-sm"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((s) => !s)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition"
-              >
-                {showPassword ? (
-                  <EyeOff className="w-4 h-4" />
-                ) : (
-                  <Eye className="w-4 h-4" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            {/* Role selection */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                User Role
-              </label>
-              <div className="relative">
-                <Layers className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                <select
-                  required
-                  value={role}
-                  onChange={(e) => {
-                    setRole(e.target.value);
-                    setManagerId(''); // Reset manager on role change
-                  }}
-                  className="w-full pl-10 pr-3 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white focus:border-brand-green focus:ring-2 focus:ring-brand-green/30 outline-none transition text-sm appearance-none"
-                >
-                  <option value="">Select Role</option>
-                  <option value="SENIOR_TL">Senior TL</option>
-                  <option value="TL">TL</option>
-                  <option value="CAPTAIN">Captain</option>
-                  <option value="INTERN">Intern</option>
-                </select>
-=======
         <form onSubmit={handleSubmit} className="min-h-0 flex-1 flex flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5">
             {error && (
               <div className="bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-900/60 text-red-700 dark:text-red-300 text-sm rounded-2xl px-4 py-3 mb-4 animate-fade-in font-medium">
                 {error}
->>>>>>> 56280d30b55dbd46b90dc834dc811186af5bd3d7
               </div>
             )}
 
-<<<<<<< HEAD
-            {/* Department */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                Department
-              </label>
-              <div className="relative">
-                <HelpCircle className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                <select
-                  value={departmentId}
-                  onChange={(e) => setDepartmentId(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white focus:border-brand-green focus:ring-2 focus:ring-brand-green/30 outline-none transition text-sm appearance-none"
-                >
-                  <option value="">Select Dept</option>
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-=======
             {successMsg && (
               <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/60 text-emerald-700 dark:text-emerald-300 text-sm rounded-2xl px-4 py-3 mb-4 animate-fade-in font-medium">
                 {successMsg}
->>>>>>> 56280d30b55dbd46b90dc834dc811186af5bd3d7
               </div>
             )}
 
