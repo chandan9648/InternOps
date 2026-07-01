@@ -14,7 +14,6 @@ const CATEGORY_STYLES = {
   GENERAL: 'text-slate-300',
 };
 
-
 // Notice list — owns its own loading / error / empty states
 function NoticeList() {
   const {
