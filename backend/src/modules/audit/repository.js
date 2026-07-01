@@ -15,7 +15,8 @@ async function getAuditLogs(limit, offset, filters = {}) {
     conditions.push(`al.resource_type = $${params.length}`);
   }
 
-  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const whereClause =
+    conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   // Get total count matching the filters
   const totalResult = await pool.query(
