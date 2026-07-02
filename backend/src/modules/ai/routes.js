@@ -85,16 +85,6 @@ async function routes(fastify) {
           error: 'Prompt or valid messages are required',
         });
       }
-      // if()
-      //   Array.isArray(messages) && messages.length > 0
-      //     ? messages
-      //     : [{ role: 'user', content: prompt }];
-
-      // if (!finalMessages[0]?.content) {
-      //   return reply.status(400).send({
-      //     error: 'Prompt or messages are required',
-      //   });
-      // }
 
       const MAX_MESSAGES = 32;
       const MAX_MESSAGE_CHARS = 4000;
@@ -149,7 +139,7 @@ async function routes(fastify) {
         }
 
         req.log.error(
-          { err: error.message, details: error.details },
+          { err: error.message, code: error.statusCode },
           'AI provider failed'
         );
         return reply.status(503).send({
