@@ -244,7 +244,6 @@ async function routes(fastify) {
         { action: 'LOGIN', userId: result.user.id, ip: req.ip, userAgent },
         'login success'
       );
-      
     }
   );
 
