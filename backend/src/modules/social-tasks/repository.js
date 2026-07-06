@@ -197,8 +197,10 @@ async function getProofImage(imageId) {
   return res.rows[0] || null;
 }
 
-async function deleteProofImage(imageId) {
-  await pool.query('DELETE FROM proof_images WHERE id = $1', [imageId]);
+async function deleteProofImage(imageId){
+  await pool.query('UPDATE proof_images SET deleted_at = NOW() WHERE id = $1',
+    [imageId]
+  );
 }
 
 module.exports = {
