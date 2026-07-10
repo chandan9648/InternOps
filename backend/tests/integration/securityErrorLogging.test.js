@@ -56,6 +56,10 @@ describe('Security Error Logging (#1012)', () => {
       }),
       'WebSocket authentication failed during token verification'
     );
+    const [warnDetails] = logger.warn.mock.calls[0];
+    expect(warnDetails).not.toHaveProperty('token');
+    expect(warnDetails).not.toHaveProperty('rawToken');
+    expect(JSON.stringify(warnDetails)).not.toContain('bad.jwt.token');
     expect(socket.disconnect).toHaveBeenCalledWith(true);
     expect(next).toHaveBeenCalledWith(expect.any(Error));
     expect(next.mock.calls[0][0].message).toBe('Authentication error');
@@ -99,6 +103,10 @@ describe('Security Error Logging (#1012)', () => {
       }),
       'CSRF bearer token verification failed while generating CSRF token'
     );
+    const [warnDetails] = request.log.warn.mock.calls[0];
+    expect(warnDetails).not.toHaveProperty('token');
+    expect(warnDetails).not.toHaveProperty('authorization');
+    expect(JSON.stringify(warnDetails)).not.toContain('malformed.jwt.token');
   });
 
   it('logs warning and forces fresh CSRF cookies when bearer verification fails during check', async () => {
@@ -148,6 +156,10 @@ describe('Security Error Logging (#1012)', () => {
       }),
       'CSRF bearer token verification failed during request validation'
     );
+    const [warnDetails] = request.log.warn.mock.calls[0];
+    expect(warnDetails).not.toHaveProperty('token');
+    expect(warnDetails).not.toHaveProperty('authorization');
+    expect(JSON.stringify(warnDetails)).not.toContain('bad.jwt.token');
     expect(reply.status).toHaveBeenCalledWith(403);
     expect(reply.send).toHaveBeenCalledWith({
       error: 'CSRF validation failed',
