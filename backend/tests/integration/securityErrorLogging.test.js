@@ -111,4 +111,37 @@ describe('Security Error Logging (#1012)', () => {
       url: '/api/users/me',
       headers: {
         cookie: `csrf-sid=${encodeURIComponent(sessionCookie)}`,
-        'x-csrf-token':
+        'x-csrf-token': _internal.tokenFor('session-123'),
+        authorization: 'Bearer bad.jwt.token',
+      },
+      log: {
+        warn: jest.fn(),
+      },
+    };
+    const reply = {
+      setCookie: jest.fn(),
+      status: jest.fn().mockReturnThis(),
+      send: jest.fn().mockReturnThis(),
+    };
+    await csrfMiddleware(request, reply);
+    expect(request.log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        url: '/api/users/me',
+        hasAuthHeader: true,
+        tokenLength: 'bad.jwt.token'.length,
+      }),
+      'CSRF bearer token verification failed during request validation'
+    );
+    const [warnDetails] = request.log.warn.mock.calls[0];
+    expect(warnDetails).not.toHaveProperty('token');
+    expect(warnDetails).not.toHaveProperty('authorization');
+    expect(JSON.stringify(warnDetails)).not.toContain('bad.jwt.token');
+
+    // A malformed bearer token during CSRF validation must NOT short-circuit
+
+    expect(reply.status).not.toHaveBeenCalled();
+    expect(reply.send).not.toHaveBeenCalled();
+    expect(reply.setCookie).not.toHaveBeenCalled();
+  });
+});
