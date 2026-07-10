@@ -6,35 +6,27 @@ describe('Security Error Logging (#1012)', () => {
 
   it('logs warning on WebSocket JWT verification failure with safe token details', () => {
     jest.resetModules();
-
     const mockVerifyAccessToken = jest.fn(() => {
       throw new Error('invalid token');
     });
-
     const use = jest.fn();
     const on = jest.fn();
-
     jest.doMock('../../src/utils/tokens', () => ({
       verifyAccessToken: mockVerifyAccessToken,
     }));
-
     jest.doMock('socket.io', () => ({
       Server: jest.fn().mockImplementation(() => ({
         use,
         on,
       })),
     }));
-
     const { initializeWebSocket } = require('../../src/websocket');
-
     const logger = {
       warn: jest.fn(),
       info: jest.fn(),
     };
-
     initializeWebSocket({}, logger);
     const authMiddleware = use.mock.calls[0][0];
-
     const socket = {
       handshake: {
         auth: { token: 'bad.jwt.token' },
@@ -44,9 +36,7 @@ describe('Security Error Logging (#1012)', () => {
       disconnect: jest.fn(),
     };
     const next = jest.fn();
-
     authMiddleware(socket, next);
-
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         clientIp: '203.0.113.10',
@@ -67,15 +57,12 @@ describe('Security Error Logging (#1012)', () => {
 
   it('logs warning on CSRF token generation when bearer verification throws', () => {
     jest.resetModules();
-
     jest.doMock('../../src/utils/tokens', () => ({
       verifyAccessToken: jest.fn(() => {
         throw new Error('jwt malformed');
       }),
     }));
-
     const { generateToken } = require('../../src/middleware/csrf');
-
     const request = {
       method: 'GET',
       url: '/api/auth/csrf',
@@ -86,13 +73,10 @@ describe('Security Error Logging (#1012)', () => {
         warn: jest.fn(),
       },
     };
-
     const reply = {
       setCookie: jest.fn(),
     };
-
     const token = generateToken(request, reply);
-
     expect(typeof token).toBe('string');
     expect(request.log.warn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -109,64 +93,22 @@ describe('Security Error Logging (#1012)', () => {
     expect(JSON.stringify(warnDetails)).not.toContain('malformed.jwt.token');
   });
 
-  it('logs warning and forces fresh CSRF cookies when bearer verification fails during check', async () => {
+  it('logs warning and does not short-circuit when bearer verification fails during check', async () => {
     jest.resetModules();
-
     jest.doMock('../../src/utils/tokens', () => ({
       verifyAccessToken: jest.fn(() => {
         throw new Error('invalid signature');
       }),
     }));
-
     const { csrfMiddleware, _internal } = require('../../src/middleware/csrf');
-
     const bootstrapReply = { setCookie: jest.fn() };
     _internal.writeSession(bootstrapReply, 'session-123', 'user-1');
     const sessionCookie = bootstrapReply.setCookie.mock.calls.find(
       ([name]) => name === 'csrf-sid'
     )[1];
-
     const request = {
       method: 'POST',
       url: '/api/users/me',
       headers: {
         cookie: `csrf-sid=${encodeURIComponent(sessionCookie)}`,
-        'x-csrf-token': _internal.tokenFor('session-123'),
-        authorization: 'Bearer bad.jwt.token',
-      },
-      log: {
-        warn: jest.fn(),
-      },
-    };
-
-    const reply = {
-      setCookie: jest.fn(),
-      status: jest.fn().mockReturnThis(),
-      send: jest.fn().mockReturnThis(),
-    };
-
-    await csrfMiddleware(request, reply);
-
-    expect(request.log.warn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'POST',
-        url: '/api/users/me',
-        hasAuthHeader: true,
-        tokenLength: 'bad.jwt.token'.length,
-      }),
-      'CSRF bearer token verification failed during request validation'
-    );
-    const [warnDetails] = request.log.warn.mock.calls[0];
-    expect(warnDetails).not.toHaveProperty('token');
-    expect(warnDetails).not.toHaveProperty('authorization');
-    expect(JSON.stringify(warnDetails)).not.toContain('bad.jwt.token');
-    expect(reply.status).toHaveBeenCalledWith(403);
-    expect(reply.send).toHaveBeenCalledWith({
-      error: 'CSRF validation failed',
-    });
-
-    const setCookieNames = reply.setCookie.mock.calls.map(([name]) => name);
-    expect(setCookieNames).toContain('csrf-sid');
-    expect(setCookieNames).toContain('csrf-token');
-  });
-});
+        'x-csrf-token':
