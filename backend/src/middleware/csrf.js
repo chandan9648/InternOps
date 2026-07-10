@@ -119,12 +119,6 @@ function getOrCreateToken(request, reply) {
         },
         'CSRF bearer token verification failed while generating CSRF token'
       );
-
-      if (session) {
-        const sid = newSessionId();
-        writeSession(reply, sid);
-        session = { sid, userId: null };
-      }
     }
   }
 
@@ -203,9 +197,6 @@ async function csrfCheck(request, reply) {
           },
           'CSRF bearer token verification failed during request validation'
         );
-
-        rotateAndSetCsrf(request, reply);
-        return reply.status(403).send({ error: 'CSRF validation failed' });
       }
     }
   }
