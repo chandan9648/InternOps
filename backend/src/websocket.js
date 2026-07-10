@@ -18,7 +18,8 @@ function initializeWebSocket(server, logger) {
     const rawToken = socket.handshake?.auth?.token;
     const token = typeof rawToken === 'string' ? rawToken : '';
     const clientIp =
-      socket.handshake?.headers?.['x-forwarded-for'] || socket.handshake?.address;
+      socket.handshake?.headers?.['x-forwarded-for'] ||
+      socket.handshake?.address;
 
     try {
       if (!token) {

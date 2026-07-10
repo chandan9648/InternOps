@@ -149,7 +149,9 @@ describe('Security Error Logging (#1012)', () => {
       'CSRF bearer token verification failed during request validation'
     );
     expect(reply.status).toHaveBeenCalledWith(403);
-    expect(reply.send).toHaveBeenCalledWith({ error: 'CSRF validation failed' });
+    expect(reply.send).toHaveBeenCalledWith({
+      error: 'CSRF validation failed',
+    });
 
     const setCookieNames = reply.setCookie.mock.calls.map(([name]) => name);
     expect(setCookieNames).toContain('csrf-sid');
