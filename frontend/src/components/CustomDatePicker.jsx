@@ -19,12 +19,20 @@ function formatDate(date) {
   return `${year}-${month}-${day}`;
 }
 
+function parseDate(value) {
+  if (!value) return null;
+
+  const date = new Date(`${value}T00:00:00Z`);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function displayDate(value) {
   if (!value) return '';
 
-  const date = new Date(`${value}T00:00:00`);
+  const date = parseDate(value);
 
-  if (Number.isNaN(date.getTime())) return value;
+  if (!date) return value;
 
   return date.toLocaleDateString('en-GB', {
     day: '2-digit',
@@ -66,7 +74,7 @@ export default function CustomDatePicker({
   className = '',
   disabled = false,
 }) {
-  const selectedDate = value ? new Date(`${value}T00:00:00`) : null;
+  const selectedDate = parseDate(value);
   const today = startOfDay(new Date());
   const initialMonth = selectedDate || today;
 
@@ -85,8 +93,8 @@ export default function CustomDatePicker({
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
 
-  const maxDate = max ? startOfDay(new Date(`${max}T00:00:00`)) : null;
-  const minDate = min ? startOfDay(new Date(`${min}T00:00:00`)) : null;
+  const maxDate = parseDate(max);
+  const minDate = parseDate(min);
 
   const monthLabel = viewDate.toLocaleDateString('en-US', {
     month: 'long',
