@@ -4,17 +4,13 @@ import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 
 function startOfDay(date) {
   if (!date) return null;
-
-  const copy = new Date(date);
-  copy.setHours(0, 0, 0, 0);
-
-  return copy;
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
 function formatDate(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
 
   return `${year}-${month}-${day}`;
 }
@@ -38,6 +34,7 @@ function displayDate(value) {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
+    timeZone: 'UTC',
   });
 }
 
@@ -45,9 +42,9 @@ function isSameDate(a, b) {
   return (
     a &&
     b &&
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+    a.getUTCFullYear() === b.getUTCFullYear() &&
+    a.getUTCMonth() === b.getUTCMonth() &&
+    a.getUTCDate() === b.getUTCDate()
   );
 }
 
@@ -75,12 +72,16 @@ export default function CustomDatePicker({
   disabled = false,
 }) {
   const selectedDate = parseDate(value);
-  const today = startOfDay(new Date());
+  // Derive today's Y-M-D using local time first, then convert through parseDate
+  // so it joins the UTC-anchored system
+  const now = new Date();
+  const todayString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const today = parseDate(todayString);
   const initialMonth = selectedDate || today;
 
   const [open, setOpen] = useState(false);
   const [viewDate, setViewDate] = useState(
-    new Date(initialMonth.getFullYear(), initialMonth.getMonth(), 1)
+    new Date(Date.UTC(initialMonth.getUTCFullYear(), initialMonth.getUTCMonth(), 1))
   );
 
   const [position, setPosition] = useState({
@@ -99,26 +100,26 @@ export default function CustomDatePicker({
   const monthLabel = viewDate.toLocaleDateString('en-US', {
     month: 'long',
     year: 'numeric',
+    timeZone: 'UTC',
   });
 
   const days = useMemo(() => {
-    const year = viewDate.getFullYear();
-    const month = viewDate.getMonth();
+    const year = viewDate.getUTCFullYear();
+    const month = viewDate.getUTCMonth();
 
-    const firstDay = new Date(year, month, 1);
-    const startDay = firstDay.getDay();
+    const firstDay = new Date(Date.UTC(year, month, 1));
+    const startDay = firstDay.getUTCDay();
 
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
 
     // Only create as many rows as needed:
     // 5 rows for normal months, 6 rows only when the month actually needs it.
     const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
 
-    const start = new Date(year, month, 1 - startDay);
+    const start = new Date(Date.UTC(year, month, 1 - startDay));
 
     return Array.from({ length: totalCells }, (_, index) => {
-      const date = new Date(start);
-      date.setDate(start.getDate() + index);
+      const date = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + index));
       return startOfDay(date);
     });
   }, [viewDate]);
@@ -202,8 +203,7 @@ export default function CustomDatePicker({
 
   const changeMonth = (amount) => {
     setViewDate((current) => {
-      const next = new Date(current);
-      next.setMonth(current.getMonth() + amount);
+      const next = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + amount, 1));
       return next;
     });
   };
@@ -228,7 +228,7 @@ export default function CustomDatePicker({
     if (maxDate && isAfterDate(today, maxDate)) return;
 
     onChange(formatDate(today));
-    setViewDate(new Date(today.getFullYear(), today.getMonth(), 1));
+    setViewDate(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)));
     setOpen(false);
   };
 
@@ -289,7 +289,7 @@ export default function CustomDatePicker({
 
             <div className="grid grid-cols-7 gap-1">
               {days.map((date) => {
-                const isCurrentMonth = date.getMonth() === viewDate.getMonth();
+                const isCurrentMonth = date.getUTCMonth() === viewDate.getUTCMonth();
                 const active = selectedDate && isSameDate(date, selectedDate);
                 const isToday = isSameDate(date, today);
 
@@ -300,7 +300,7 @@ export default function CustomDatePicker({
 
                 return (
                   <button
-                    key={`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`}
+                    key={`${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`}
                     type="button"
                     disabled={disabledDay}
                     onClick={() => selectDate(date)}
@@ -316,7 +316,7 @@ export default function CustomDatePicker({
                               : 'text-slate-700 dark:text-slate-200 border-transparent hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-700 dark:hover:text-indigo-300'
                     }`}
                   >
-                    {date.getDate()}
+                    {date.getUTCDate()}
                   </button>
                 );
               })}
