@@ -137,6 +137,11 @@ app.register(require('@fastify/helmet'), {
   },
 });
 
+app.register(require('@fastify/compress'), {
+  global: true,
+  encodings: ['gzip', 'deflate', 'br'],
+});
+
 //  Register once globally — no Redis dependency
 app.register(require('@fastify/rate-limit'), {
   global: true,
