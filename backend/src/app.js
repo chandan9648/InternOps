@@ -8,7 +8,7 @@ const Fastify = require('fastify');
 const config = require('./config');
 const pool = require('./config/db');
 const metrics = require('./utils/metrics');
-const { initializeWebSocket } = require('./websocket');
+const { initializeWebSocket, getIO } = require('./websocket');
 const noticesRoutes = require('./modules/notices/routes');
 const { getRedisStatus } = require('./config/redis');
 const { csrfMiddleware } = require('./middleware/csrf');
@@ -355,6 +355,18 @@ const gracefulShutdown = async (signal) => {
   app.log.info({ signal }, `Received ${signal}, shutting down gracefully...`);
 
   try {
+    // close WebSocket server if initialized
+    try {
+      const io = getIO();
+      if (io) {
+        app.log.info('Closing WebSocket server...');
+        await new Promise((resolve) => io.close(resolve));
+        app.log.info('WebSocket server closed');
+      }
+    } catch (wsErr) {
+      app.log.warn({ err: wsErr }, 'Error closing WebSocket server');
+    }
+
     // stop accepting new requests + finish in-flight requests
     await app.close();
 
@@ -362,10 +374,15 @@ const gracefulShutdown = async (signal) => {
     await pool.end();
 
     app.log.info('Cleanup completed. Exiting now.');
-    process.exit(0);
+
+    if (process.env.NODE_ENV !== 'test') {
+      process.exit(0);
+    }
   } catch (err) {
     app.log.error({ err }, 'Error during shutdown');
-    process.exit(1);
+    if (process.env.NODE_ENV !== 'test') {
+      process.exit(1);
+    }
   }
 };
 
