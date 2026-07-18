@@ -142,7 +142,12 @@ app.register(require('@fastify/rate-limit'), {
 });
 
 app.register(require('@fastify/cookie'));
-app.addHook('preHandler', csrfMiddleware);
+app.addHook('preHandler', async (request, reply) => {
+  const path = request.routerPath ?? request.routeOptions?.url;
+  if (path === '/api/v1/auth/logout') return;
+
+  return csrfMiddleware(request, reply);
+});
 // Sanitize all string fields in body, query, and params using sanitize-html
 // (allowlist of zero tags) to prevent XSS. Runs after body parsing.
 app.addHook('preHandler', sanitizationMiddleware);
