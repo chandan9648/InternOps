@@ -39,10 +39,7 @@ function buildRedisClientOptions() {
 function scheduleReconnect() {
   setTimeout(() => {
     clientPromise = null;
-    reconnectDelay = Math.min(
-      reconnectDelay * 2,
-      MAX_RECONNECT_DELAY
-    );
+    reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
   }, reconnectDelay).unref();
 }
 
@@ -59,35 +56,35 @@ async function getRedisClient() {
     try {
       const c = redis.createClient(redisOptions);
       if (!listenersAttached) {
-  c.on('error', (err) => {
-    logger.warn(
-      { err: getSafeRedisError(err), name: 'redis_error' },
-      'Redis connection error'
-    );
-  });
+        c.on('error', (err) => {
+          logger.warn(
+            { err: getSafeRedisError(err), name: 'redis_error' },
+            'Redis connection error'
+          );
+        });
 
-c.on('disconnect', () => {
-  redisConnected = false;
-  client = null;
-  clientPromise = null;
+        c.on('disconnect', () => {
+          redisConnected = false;
+          client = null;
+          clientPromise = null;
 
-  logger.warn('Redis disconnected');
-});
+          logger.warn('Redis disconnected');
+        });
 
-  c.on('connect', () => {
-    redisConnected = true;
-    logger.info('Redis connected');
-  });
+        c.on('connect', () => {
+          redisConnected = true;
+          logger.info('Redis connected');
+        });
 
-  listenersAttached = true;
-}
-await c.connect();
+        listenersAttached = true;
+      }
+      await c.connect();
 
-client = c;
-redisConnected = true;
-reconnectDelay = 1000;
+      client = c;
+      redisConnected = true;
+      reconnectDelay = 1000;
 
-return client;
+      return client;
     } catch (err) {
       logger.warn(
         { err: getSafeRedisError(err), name: 'redis_unavailable' },
@@ -99,7 +96,6 @@ return client;
       listenersAttached = false;
       redisConnected = false;
       scheduleReconnect();
-
 
       // Do NOT reset clientPromise here. Keep the settled-null promise so each
       // subsequent call returns null immediately instead of retrying repeatedly.
