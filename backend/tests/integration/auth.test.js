@@ -363,6 +363,42 @@ describe('Auth Integration Tests', () => {
       expect(res.statusCode).toBe(400);
     });
 
+    it('should allow only one reset attempt per token under concurrent requests', async () => {
+      await resetSeededAdminPassword();
+
+      const sendSpy = jest.spyOn(emailService, 'sendPasswordReset');
+      try {
+        const forgotRes = await inject('POST', '/api/v1/auth/forgot-password', {
+          payload: { email: SEEDED_ADMIN_EMAIL },
+          remoteAddress: resetRouteIp(14),
+        });
+        expect(forgotRes.statusCode).toBe(200);
+
+        expect(sendSpy).toHaveBeenCalled();
+        const resetToken = sendSpy.mock.calls[sendSpy.mock.calls.length - 1][1];
+
+        const requests = Array.from({ length: 10 }, (_, index) =>
+          inject('POST', '/api/v1/auth/reset-password', {
+            payload: {
+              token: resetToken,
+              newPassword: `ConcurrentPassword${index}@123!`,
+            },
+          })
+        );
+
+        const responses = await Promise.all(requests);
+        const successCount = responses.filter((res) => res.statusCode === 200).length;
+        const failureCount = responses.filter((res) => res.statusCode === 400).length;
+
+        expect(successCount).toBe(1);
+        expect(failureCount).toBe(9);
+      } finally {
+        sendSpy.mockRestore();
+        await resetSeededAdminPassword();
+        await login();
+      }
+    }, 30000);
+
     it('should revoke all refresh tokens and Redis cache on password reset', async () => {
       await resetSeededAdminPassword();
 
