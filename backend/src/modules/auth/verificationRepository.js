@@ -55,9 +55,10 @@ async function consumeEmailVerificationToken(rawToken) {
     }
 
     const record = res.rows[0];
-    await client.query('UPDATE email_verifications SET used = TRUE WHERE id = $1', [
-      record.id,
-    ]);
+    await client.query(
+      'UPDATE email_verifications SET used = TRUE WHERE id = $1',
+      [record.id]
+    );
     await client.query('COMMIT');
     return record;
   } catch (err) {

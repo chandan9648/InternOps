@@ -95,9 +95,10 @@ async function resetPasswordAtomic(rawToken, newPassword) {
     }
 
     const tokenRecord = tokenRes.rows[0];
-    await client.query('UPDATE password_reset_tokens SET used = TRUE WHERE id = $1', [
-      tokenRecord.id,
-    ]);
+    await client.query(
+      'UPDATE password_reset_tokens SET used = TRUE WHERE id = $1',
+      [tokenRecord.id]
+    );
 
     const userId = tokenRecord.user_id;
     const hash = await argon2.hash(newPassword);

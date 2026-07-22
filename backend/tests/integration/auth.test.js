@@ -387,8 +387,12 @@ describe('Auth Integration Tests', () => {
         );
 
         const responses = await Promise.all(requests);
-        const successCount = responses.filter((res) => res.statusCode === 200).length;
-        const failureCount = responses.filter((res) => res.statusCode === 400).length;
+        const successCount = responses.filter(
+          (res) => res.statusCode === 200
+        ).length;
+        const failureCount = responses.filter(
+          (res) => res.statusCode === 400
+        ).length;
 
         expect(successCount).toBe(1);
         expect(failureCount).toBe(9);
