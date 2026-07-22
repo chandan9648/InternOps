@@ -61,10 +61,11 @@ afterAll(async () => {
   await app.close();
 });
 
-// Clear brute-force state before each test so failed login attempts in one
-// test cannot accumulate into a lockout that breaks the next test.
+// Clear brute-force state and password reset attempts before each test so
+// state from one test does not leak into the next.
 beforeEach(async () => {
   await clearLoginAttempts();
+  await clearPasswordResetAttempts();
 });
 
 function authHeaders(extra) {
