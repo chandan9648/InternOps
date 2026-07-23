@@ -31,8 +31,18 @@ describe('Notifications Page Row Action Pending States', () => {
 
   it('disables only the active notification row action button while request is pending', async () => {
     const mockNotifications = [
-      { id: 101, message: 'First unread alert', read: false, created_at: new Date().toISOString() },
-      { id: 102, message: 'Second unread alert', read: false, created_at: new Date().toISOString() },
+      {
+        id: 101,
+        message: 'First unread alert',
+        read: false,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: 102,
+        message: 'Second unread alert',
+        read: false,
+        created_at: new Date().toISOString(),
+      },
     ];
 
     api.get.mockResolvedValueOnce({
@@ -61,7 +71,9 @@ describe('Notifications Page Row Action Pending States', () => {
     expect(await screen.findByText('First unread alert')).toBeInTheDocument();
     expect(screen.getByText('Second unread alert')).toBeInTheDocument();
 
-    const markReadButtons = screen.getAllByRole('button', { name: /mark read/i });
+    const markReadButtons = screen.getAllByRole('button', {
+      name: /mark read/i,
+    });
     expect(markReadButtons).toHaveLength(2);
     expect(markReadButtons[0]).not.toBeDisabled();
     expect(markReadButtons[1]).not.toBeDisabled();
@@ -74,11 +86,15 @@ describe('Notifications Page Row Action Pending States', () => {
       expect(screen.getByText('Marking...')).toBeInTheDocument();
     });
 
-    const pendingButton = screen.getByRole('button', { name: /marking\.\.\./i });
+    const pendingButton = screen.getByRole('button', {
+      name: /marking\.\.\./i,
+    });
     expect(pendingButton).toBeDisabled();
 
     // Second button should STILL be enabled
-    const remainingMarkReadButtons = screen.getAllByRole('button', { name: /mark read/i });
+    const remainingMarkReadButtons = screen.getAllByRole('button', {
+      name: /mark read/i,
+    });
     expect(remainingMarkReadButtons).toHaveLength(1);
     expect(remainingMarkReadButtons[0]).not.toBeDisabled();
 
@@ -88,8 +104,18 @@ describe('Notifications Page Row Action Pending States', () => {
 
   it('disables only the active notification delete button while delete request is pending', async () => {
     const mockNotifications = [
-      { id: 201, message: 'Delete target alert', read: true, created_at: new Date().toISOString() },
-      { id: 202, message: 'Other alert', read: true, created_at: new Date().toISOString() },
+      {
+        id: 201,
+        message: 'Delete target alert',
+        read: true,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: 202,
+        message: 'Other alert',
+        read: true,
+        created_at: new Date().toISOString(),
+      },
     ];
 
     api.get.mockResolvedValueOnce({
