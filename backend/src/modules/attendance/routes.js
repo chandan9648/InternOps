@@ -224,7 +224,10 @@ async function routes(fastify) {
   fastify.get(
     '/record/:id',
     {
-      schema: { tags: ['Attendance'], description: 'Get a single attendance record by ID' },
+      schema: {
+        tags: ['Attendance'],
+        description: 'Get a single attendance record by ID',
+      },
       preHandler: [auth],
     },
     async (req, reply) => {
@@ -242,8 +245,10 @@ async function routes(fastify) {
         record = await repo.getAttendanceById(attendanceId, req.user.id);
       }
 
-      if (record === null) return reply.status(404).send({ error: 'Attendance record not found' });
-      if (record === undefined) return reply.status(403).send({ error: 'Forbidden: not your record' });
+      if (record === null)
+        return reply.status(404).send({ error: 'Attendance record not found' });
+      if (record === undefined)
+        return reply.status(403).send({ error: 'Forbidden: not your record' });
 
       return record;
     }
@@ -253,22 +258,29 @@ async function routes(fastify) {
   fastify.patch(
     '/record/:id',
     {
-      schema: { tags: ['Attendance'], description: 'Update an attendance record' },
+      schema: {
+        tags: ['Attendance'],
+        description: 'Update an attendance record',
+      },
       preHandler: [auth, sanitize],
     },
     async (req, reply) => {
       const attendanceId = req.params.id;
 
-      const schema = z.object({
-        status: z.enum(['PRESENT', 'ABSENT', 'HALF_DAY']).optional(),
-        remarks: z.string().max(500).optional(),
-      }).refine((d) => d.status !== undefined || d.remarks !== undefined, {
-        message: 'At least one of status or remarks must be provided',
-      });
+      const schema = z
+        .object({
+          status: z.enum(['PRESENT', 'ABSENT', 'HALF_DAY']).optional(),
+          remarks: z.string().max(500).optional(),
+        })
+        .refine((d) => d.status !== undefined || d.remarks !== undefined, {
+          message: 'At least one of status or remarks must be provided',
+        });
 
       const parsed = schema.safeParse(req.body);
       if (!parsed.success) {
-        return reply.status(400).send({ error: 'Validation failed', details: parsed.error.issues });
+        return reply
+          .status(400)
+          .send({ error: 'Validation failed', details: parsed.error.issues });
       }
 
       const { status, remarks } = parsed.data;
@@ -300,13 +312,14 @@ async function routes(fastify) {
         return row;
       });
 
-      if (updated === null) return reply.status(404).send({ error: 'Attendance record not found' });
-      if (updated === undefined) return reply.status(403).send({ error: 'Forbidden: not your record' });
+      if (updated === null)
+        return reply.status(404).send({ error: 'Attendance record not found' });
+      if (updated === undefined)
+        return reply.status(403).send({ error: 'Forbidden: not your record' });
 
       return reply.status(200).send(updated);
     }
   );
-
 
   // Monthly stats (requires ownership)
   fastify.get(

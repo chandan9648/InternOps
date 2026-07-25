@@ -180,7 +180,7 @@ async function updateAttendanceById(
 ) {
   // First verify the record exists and the requester is authorised.
   const record = await getAttendanceById(attendanceId, requesterId);
-  if (record === null) return null;  // not found
+  if (record === null) return null; // not found
   if (record === undefined) return undefined; // not authorised → 403
 
   const res = await client.query(
