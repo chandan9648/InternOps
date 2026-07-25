@@ -143,6 +143,57 @@ async function getAuthorizedSubordinates(managerId) {
   return res.rows;
 }
 
+// Fetch a single attendance record by its PK only if the requester is the
+// owner or an authorised manager in the transitive hierarchy chain.
+async function getAttendanceById(attendanceId, requesterId) {
+  const res = await pool.query(
+    `SELECT a.*, u.manager_id AS owner_manager_id
+     FROM attendance a
+     JOIN users u ON u.id = a.user_id
+     WHERE a.id = $1 AND a.deleted_at IS NULL`,
+    [attendanceId]
+  );
+
+  if (res.rowCount === 0) return null;
+
+  const record = res.rows[0];
+
+  // Self-ownership: requester owns this record.
+  if (record.user_id === requesterId) return record;
+
+  // Manager hierarchy: check if requester is an ancestor of record owner.
+  const { checkHierarchyAccess } = require('../../utils/hierarchy');
+  const authorised = await checkHierarchyAccess(requesterId, record.user_id);
+  if (!authorised) return undefined; // signals 403 to caller
+
+  return record;
+}
+
+// Update a single attendance record by PK, scoping the WHERE clause to
+// records whose user_id the requester is authorised to manage.
+// Returns the updated row or null if not found / not authorised.
+async function updateAttendanceById(
+  attendanceId,
+  requesterId,
+  { status, remarks },
+  client = pool
+) {
+  // First verify the record exists and the requester is authorised.
+  const record = await getAttendanceById(attendanceId, requesterId);
+  if (record === null) return null;  // not found
+  if (record === undefined) return undefined; // not authorised → 403
+
+  const res = await client.query(
+    `UPDATE attendance
+     SET status=$1, remarks=$2, updated_at=NOW()
+     WHERE id=$3 AND deleted_at IS NULL
+     RETURNING *`,
+    [status, remarks ?? null, attendanceId]
+  );
+
+  return res.rows[0] ?? null;
+}
+
 module.exports = {
   markAttendance,
   getAttendance,
@@ -150,4 +201,6 @@ module.exports = {
   bulkMark,
   listHierarchySubordinates,
   getAuthorizedSubordinates,
+  getAttendanceById,
+  updateAttendanceById,
 };

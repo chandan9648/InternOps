@@ -220,6 +220,94 @@ async function routes(fastify) {
     }
   );
 
+  // Get a single attendance record by its PK (ownership-scoped)
+  fastify.get(
+    '/record/:id',
+    {
+      schema: { tags: ['Attendance'], description: 'Get a single attendance record by ID' },
+      preHandler: [auth],
+    },
+    async (req, reply) => {
+      const attendanceId = req.params.id;
+
+      // ADMIN bypasses the ownership check.
+      let record;
+      if (req.user.role === 'ADMIN') {
+        const res = await pool.query(
+          'SELECT a.*, m.full_name AS marked_by_name FROM attendance a LEFT JOIN users m ON m.id = a.marked_by WHERE a.id = $1 AND a.deleted_at IS NULL',
+          [attendanceId]
+        );
+        record = res.rows[0] ?? null;
+      } else {
+        record = await repo.getAttendanceById(attendanceId, req.user.id);
+      }
+
+      if (record === null) return reply.status(404).send({ error: 'Attendance record not found' });
+      if (record === undefined) return reply.status(403).send({ error: 'Forbidden: not your record' });
+
+      return record;
+    }
+  );
+
+  // Update a single attendance record by PK (ownership-scoped, fixes IDOR #1393)
+  fastify.patch(
+    '/record/:id',
+    {
+      schema: { tags: ['Attendance'], description: 'Update an attendance record' },
+      preHandler: [auth, sanitize],
+    },
+    async (req, reply) => {
+      const attendanceId = req.params.id;
+
+      const schema = z.object({
+        status: z.enum(['PRESENT', 'ABSENT', 'HALF_DAY']).optional(),
+        remarks: z.string().max(500).optional(),
+      }).refine((d) => d.status !== undefined || d.remarks !== undefined, {
+        message: 'At least one of status or remarks must be provided',
+      });
+
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ error: 'Validation failed', details: parsed.error.issues });
+      }
+
+      const { status, remarks } = parsed.data;
+
+      const updated = await dbTx(async (client) => {
+        // updateAttendanceById performs the ownership check before the UPDATE.
+        // Returns null (404), undefined (403), or the updated row.
+        const row = await repo.updateAttendanceById(
+          attendanceId,
+          req.user.id,
+          { status, remarks },
+          client
+        );
+
+        if (row !== null && row !== undefined) {
+          await createAuditLog(
+            {
+              userId: req.user.id,
+              ...extractRequestInfo(req),
+              action: 'ATTENDANCE_UPDATED',
+              resourceType: 'attendance',
+              resourceId: attendanceId,
+              details: { status, remarks },
+            },
+            client
+          );
+        }
+
+        return row;
+      });
+
+      if (updated === null) return reply.status(404).send({ error: 'Attendance record not found' });
+      if (updated === undefined) return reply.status(403).send({ error: 'Forbidden: not your record' });
+
+      return reply.status(200).send(updated);
+    }
+  );
+
+
   // Monthly stats (requires ownership)
   fastify.get(
     '/:userId/stats',
