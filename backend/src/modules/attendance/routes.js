@@ -19,7 +19,9 @@ const { z } = require('zod');
 const { AppError } = require('../../utils/errors');
 
 // Zod schema that accepts a numeric integer id (as a string from URL params).
-const idParamSchema = z.string().regex(/^\d+$/, ':id must be a positive integer');
+const idParamSchema = z
+  .string()
+  .regex(/^\d+$/, ':id must be a positive integer');
 
 async function routes(fastify) {
   // Mark attendance (manager roles; target must be in the requester's hierarchy)

@@ -159,7 +159,8 @@ async function getAttendanceById(attendanceId, requesterId) {
     [attendanceId]
   );
 
-  if (res.rowCount === 0) throw new NotFoundError('Attendance record not found');
+  if (res.rowCount === 0)
+    throw new NotFoundError('Attendance record not found');
 
   const record = res.rows[0];
 
