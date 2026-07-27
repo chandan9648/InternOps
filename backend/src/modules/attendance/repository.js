@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { NotFoundError, ForbiddenError } = require('../../utils/errors');
 
 async function markAttendance(
   userId,
@@ -145,18 +146,25 @@ async function getAuthorizedSubordinates(managerId) {
 
 // Fetch a single attendance record by its PK only if the requester is the
 // owner or an authorised manager in the transitive hierarchy chain.
+// Always includes marked_by_name for a consistent response payload.
+// Throws NotFoundError (404) or ForbiddenError (403) instead of returning
+// null/undefined sentinels so callers don't rely on type-coercion checks.
+// Pass requesterId=null to bypass ownership checks (ADMIN use-case).
 async function getAttendanceById(attendanceId, requesterId) {
   const res = await pool.query(
-    `SELECT a.*, u.manager_id AS owner_manager_id
+    `SELECT a.*, m.full_name AS marked_by_name
      FROM attendance a
-     JOIN users u ON u.id = a.user_id
+     LEFT JOIN users m ON m.id = a.marked_by
      WHERE a.id = $1 AND a.deleted_at IS NULL`,
     [attendanceId]
   );
 
-  if (res.rowCount === 0) return null;
+  if (res.rowCount === 0) throw new NotFoundError('Attendance record not found');
 
   const record = res.rows[0];
+
+  // ADMIN bypass: no ownership check needed.
+  if (requesterId === null) return record;
 
   // Self-ownership: requester owns this record.
   if (record.user_id === requesterId) return record;
@@ -164,24 +172,23 @@ async function getAttendanceById(attendanceId, requesterId) {
   // Manager hierarchy: check if requester is an ancestor of record owner.
   const { checkHierarchyAccess } = require('../../utils/hierarchy');
   const authorised = await checkHierarchyAccess(requesterId, record.user_id);
-  if (!authorised) return undefined; // signals 403 to caller
+  if (!authorised) throw new ForbiddenError('Forbidden: not your record');
 
   return record;
 }
 
 // Update a single attendance record by PK, scoping the WHERE clause to
 // records whose user_id the requester is authorised to manage.
-// Returns the updated row or null if not found / not authorised.
+// Throws NotFoundError or ForbiddenError (propagated from getAttendanceById)
+// on failure, returns the updated row on success.
 async function updateAttendanceById(
   attendanceId,
   requesterId,
   { status, remarks },
   client = pool
 ) {
-  // First verify the record exists and the requester is authorised.
-  const record = await getAttendanceById(attendanceId, requesterId);
-  if (record === null) return null; // not found
-  if (record === undefined) return undefined; // not authorised → 403
+  // Throws NotFoundError or ForbiddenError if access is not permitted.
+  await getAttendanceById(attendanceId, requesterId);
 
   const res = await client.query(
     `UPDATE attendance
@@ -191,7 +198,7 @@ async function updateAttendanceById(
     [status, remarks ?? null, attendanceId]
   );
 
-  return res.rows[0] ?? null;
+  return res.rows[0];
 }
 
 module.exports = {
