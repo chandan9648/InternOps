@@ -23,7 +23,6 @@ const templateCreateSchema = z.object({
 
 const templateUpdateSchema = templateCreateSchema.partial();
 
-
 const certificateGenerateSchema = z
   .object({
     template_id: z.string().uuid().optional(),
