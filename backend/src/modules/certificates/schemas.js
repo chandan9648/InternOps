@@ -23,27 +23,6 @@ const templateCreateSchema = z.object({
 
 const templateUpdateSchema = templateCreateSchema.partial();
 
-const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-
-const dateOnlySchema = z
-  .string()
-  .regex(DATE_ONLY_REGEX, 'Date must be in YYYY-MM-DD format')
-  .refine((value) => {
-    const [year, month, day] = value.split('-').map(Number);
-    const date = new Date(Date.UTC(year, month - 1, day));
-
-    return (
-      date.getUTCFullYear() === year &&
-      date.getUTCMonth() === month - 1 &&
-      date.getUTCDate() === day
-    );
-  }, 'Invalid calendar date');
-
-function toUtcTimestamp(dateString) {
-  const [year, month, day] = dateString.split('-').map(Number);
-  return Date.UTC(year, month - 1, day);
-}
-
 const certificateGenerateSchema = z
   .object({
     template_id: z.string().uuid().optional(),
