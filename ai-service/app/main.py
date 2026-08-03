@@ -21,6 +21,8 @@ app.include_router(certificates_router, prefix="/certificates", tags=["Certifica
 app.include_router(ai_router)
 app.include_router(health_router)
 
+app.include_router(generate.router, prefix="/api/v1")
+
 @app.get("/")
 async def root():
     return {

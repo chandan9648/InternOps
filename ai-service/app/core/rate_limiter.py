@@ -1,7 +1,6 @@
 import logging
 import time
-import uuid
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import redis.asyncio as redis
 from fastapi import Depends, HTTPException, Request, status
@@ -11,108 +10,55 @@ from app.core.config import RATE_LIMIT_PER_MINUTE, REDIS_URL
 
 logger = logging.getLogger(__name__)
 
+# Initialize a global Redis client.
+redis_client = redis.from_url(REDIS_URL) if REDIS_URL else None
 
 class RateLimiter:
-    """Simple in-memory sliding window rate limiter.
+    """Rate limiter with Redis fixed-window and in-memory sliding-window fallback."""
 
-    Keys off the verified user_id from the JWT (injected via get_current_user),
-    NOT a client-supplied header — the previous X-User-ID approach was spoofable.
-    """
-
-    def __init__(
-        self,
-        requests_per_minute: int = RATE_LIMIT_PER_MINUTE,
-        redis_url: Optional[str] = REDIS_URL,
-    ):
+    def __init__(self, requests_per_minute: int = RATE_LIMIT_PER_MINUTE):
         self.requests_per_minute = requests_per_minute
-        self.redis_url = redis_url
-        self.redis_client: Optional[redis.Redis] = None
-
         # Local fallback if Redis is unavailable
         self.history: Dict[str, List[float]] = {}
-
-    async def _get_redis(self) -> Optional[redis.Redis]:
-        """Lazily initialize and validate the Redis client."""
-        if self.redis_client is not None:
-            return self.redis_client
-
-        if not self.redis_url:
-            return None
-
-        try:
-            client = redis.Redis.from_url(
-                self.redis_url,
-                decode_responses=True,
-            )
-            await client.ping()
-            self.redis_client = client
-            return client
-        except redis.RedisError as exc:
-            logger.warning(
-                "Failed to connect to Redis. Falling back to in-memory rate limiting: %s",
-                exc,
-            )
-        return None
 
     async def check_rate_limit(
         self,
         request: Request,
         current_user: User = Depends(get_current_user),
     ):
-        # Use the cryptographically verified user id from the JWT.
-        # Falls back to client IP only as a last resort (should never happen
-        # since get_current_user already enforces auth).
         client_id = current_user.id if isinstance(current_user, User) else (
             request.client.host if (request and getattr(request, "client", None)) else "unknown"
         )
-
-        # ------------------------------------------------------------------
-        # Redis-backed distributed rate limiting
-        # ------------------------------------------------------------------
-        redis_conn = await self._get_redis()
-
-        if redis_conn:
+        
+        # 1. Try Redis first
+        if redis_client:
+            key = f"ai:ratelimit:{client_id}"
             try:
-                current_time = time.time()
-                window_start = current_time - 60
-                key = f"ai:ratelimit:{client_id}"
+                count = await redis_client.incr(key)
+                
+                # If this is the first request in the window, set expiration
+                if count == 1:
+                    await redis_client.expire(key, 60)
 
-                # Unique member prevents collisions for requests
-                # arriving at the same timestamp
-                member = f"{current_time}:{uuid.uuid4().hex}"
-
-                async with redis_conn.pipeline(transaction=True) as pipe:
-                    pipe.zremrangebyscore(key, 0, window_start)
-                    pipe.zadd(key, {member: current_time})
-                    pipe.zcard(key)
-                    pipe.expire(key, 60)
-
-                    results = await pipe.execute()
-
-                request_count = results[2]
-
-                if request_count > self.requests_per_minute:
+                if count > self.requests_per_minute:
                     raise HTTPException(
                         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                         detail="AI request rate limit exceeded. Please wait before retrying.",
                         headers={"Retry-After": "60"},
                     )
-
-                return
-
-            except redis.RedisError as exc:
-                logger.warning(
-                    "Redis error during rate limit check. "
-                    "Falling back to in-memory limiter: %s",
-                    exc,
-                )
-
-        # ------------------------------------------------------------------
-        # Fallback: existing in-memory sliding window
-        # ------------------------------------------------------------------
+                return  # Success, exit early without using in-memory history
+                
+            except HTTPException:
+                raise # Re-raise the 429 block
+            except Exception as e:
+                # Log the failure and proceed to the in-memory fallback below
+                logger.warning("Redis rate limiter failed: %s. Falling back to in-memory.", e)
+        
+        # 2. Fallback to in-memory limiter
         current_time = time.time()
         window_start = current_time - 60
 
+        # Filter out timestamps older than 60 seconds
         timestamps = [
             ts
             for ts in self.history.get(client_id, [])
@@ -127,8 +73,8 @@ class RateLimiter:
                 headers={"Retry-After": "60"},
             )
 
+        # Record this request
         timestamps.append(current_time)
         self.history[client_id] = timestamps
-
 
 ai_rate_limiter = RateLimiter()

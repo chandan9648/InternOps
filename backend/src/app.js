@@ -420,6 +420,8 @@ if (process.env.NODE_ENV !== 'test') {
   githubSyncOrchestrator.initialize();
 }
 
+const bulkJobQueue = require('./services/bulkJobQueue');
+
 const start = async () => {
   try {
     await app.listen({
@@ -427,6 +429,7 @@ const start = async () => {
       host: config.host,
     });
     initializeWebSocket(app.server, app.log);
+    await bulkJobQueue.init();
     app.log.info(
       { port: config.port },
       `Server listening on port ${config.port}`

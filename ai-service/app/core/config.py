@@ -1,9 +1,13 @@
 import os
 import warnings
+import logging
 from typing import Any, List, Optional
 from dotenv import load_dotenv
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Setup module logger
+logger = logging.getLogger(__name__)
 
 # Load .env file using dotenv to ensure os.environ is populated
 load_dotenv()
@@ -60,7 +64,6 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore"
     )
-    PROJECT_NAME: str = "InternOps AI Service"
 
     PROJECT_NAME: str = "InternOps AI Service"
     API_V1_STR: str = "/api/v1"
@@ -208,10 +211,13 @@ class Settings(BaseSettings):
             if _is_valid_key(fb_key):
                 active_fallbacks.append(fb)
             else:
-                warnings.warn(
-                    f"Fallback provider '{fb}' lacks a valid API key ({fb_key_attr}). It will be skipped from the active fallback chain.",
-                    RuntimeWarning
+                warning_msg = (
+                    f"Fallback provider '{fb}' lacks a valid API key ({fb_key_attr}). "
+                    "It will be skipped from the active fallback chain."
                 )
+                warnings.warn(warning_msg, RuntimeWarning)
+                logger.warning(warning_msg)
+
         self.ACTIVE_FALLBACK_PROVIDERS = active_fallbacks
 
         # 4. Model Overrides & Defaults for Active Providers Only
@@ -222,6 +228,7 @@ class Settings(BaseSettings):
             if not model_val or not model_val.strip():
                 # Apply default model
                 setattr(self, model_attr, DEFAULT_MODELS[provider])
+            
             # Raise error if active provider still cannot resolve to a usable model
             resolved_model = getattr(self, model_attr, None)
             if not resolved_model or not resolved_model.strip():
