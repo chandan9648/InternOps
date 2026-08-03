@@ -1,5 +1,13 @@
 const { z } = require('zod');
 
+const dateOnlySchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format');
+
+function toUtcTimestamp(dateOnly) {
+  return new Date(`${dateOnly}T00:00:00.000Z`).getTime();
+}
+
 const templateCreateSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional(),
@@ -113,6 +121,7 @@ const aiAutoGenerateSchema = z.object({
 });
 
 module.exports = {
+  dateOnlySchema,
   templateCreateSchema,
   templateUpdateSchema,
   certificateGenerateSchema,
