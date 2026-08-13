@@ -3,15 +3,16 @@ AI routes — Python/FastAPI port of ai_routes.js
 
 Split to match ai-service/app's layout (api/ + core/ + models/ + providers/):
   - app/models/ai.py          -> request/response schemas
-  - app/core/auth.py           -> get_current_user (STUB)
-  - app/core/rbac.py            -> require_roles (STUB)
+  - app/core/auth.py           -> get_current_user 
+  - app/core/rbac.py            -> require_permission
+  - app/core/authorization.py     -> permission evaluation
   - app/core/rate_limit.py      -> enforce_rate_limit (STUB)
   - app/core/usage.py             -> daily usage tracking (STUB)
   - app/providers/*                 -> base/gemini/openai adapters (real, from #1421)
   - app/providers/registry.py     -> provider selection (get_provider), added here
 
 `call_provider` below flattens the message list into a single prompt
-(see `_messages_to_prompt`) since BaseAIProvider.generate_text() doesn't
+(see `_messages_to_prompt`) since BaseAIProvider.generate_chat() doesn't
 support multi-turn history yet, then calls the configured adapter for real.
 """
 
@@ -22,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from ..core.auth import User, get_current_user
 from ..core.rate_limit import enforce_rate_limit
-from ..core.rbac import require_roles
+from ..core.rbac import require_permission
 from ..core.cache import cache_key, get_or_set
 from ..core.usage import (
     DAILY_AI_LIMIT,
@@ -43,6 +44,8 @@ from ..providers.orchestrator import ai_orchestrator, get_circuit_breaker
 from ..providers.registry import get_configured_providers_health
 from ..core.security import sanitize_prompt
 
+import json
+
 router = APIRouter(prefix="/ai", tags=["AI"])
 
 
@@ -54,37 +57,24 @@ MAX_TOTAL_CHARS = 32000
 BODY_LIMIT_BYTES = 2 * 1024 * 1024
 
 
-def _messages_to_prompt(messages: List[dict]) -> str:
-    """Flatten a chat-style message list into a single prompt string.
-
-    TODO(providers): BaseAIProvider.generate_text() takes a single prompt,
-    not a multi-turn message list — the adapters don't have native
-    chat/history support yet. This is a simple, intentionally-lossy
-    workaround (roles become text labels, no real conversation structure)
-    until the provider interface grows multi-turn support.
-    """
-    role_labels = {"user": "User", "assistant": "Assistant", "system": "System"}
-    return "\n\n".join(
-        f"{role_labels.get(m['role'], m['role'])}: {m['content']}" for m in messages
-    )
-
 
 
 
 async def call_provider(user_id: str, messages: List[dict]) -> ProviderResult:
-    prompt = _messages_to_prompt(messages)
-
     temperature = 0.7
+
+    # Serialize messages for the cache key
+    messages_json = json.dumps(messages)
 
     key = cache_key(
         provider="orchestrator",
         model="fallback",
-        prompt=prompt,
+        prompt=messages_json,
         temperature=temperature,
     )
 
     async def compute():
-        return await ai_orchestrator.generate_text_with_fallback(prompt)
+        return await ai_orchestrator.generate_chat_with_fallback(messages)
 
     (content, provider_name), cached = await get_or_set(
         key=key,
@@ -103,21 +93,31 @@ async def call_provider(user_id: str, messages: List[dict]) -> ProviderResult:
 async def get_provider_health() -> list:
     raw_health = get_configured_providers_health()
     report = []
+
     for p in raw_health:
         name = p["name"]
+        status = p["status"]
+        last_error = p.get("lastErrorMessage")
+
         cb = get_circuit_breaker(name)
-        available = p["available"]
-        last_error = p.get("lastError") or {}
-        
+
         if await cb.is_open():
-            available = False
-            last_error = {"message": f"Circuit breaker open. Cooldown until {datetime.fromtimestamp(cb.disabled_until).isoformat() if cb.disabled_until else 'unknown'}"}
-            
-        report.append({
-            "name": name,
-            "available": available,
-            "lastError": last_error if last_error else None
-        })
+            status = "unhealthy"
+            last_error = (
+                f"Circuit breaker open. Cooldown until "
+                f"{datetime.fromtimestamp(cb.disabled_until).isoformat()}"
+                if cb.disabled_until
+                else "Circuit breaker open"
+            )
+
+        report.append(
+            {
+                "name": name,
+                "status": status,
+                "lastErrorMessage": last_error,
+            }
+        )
+
     return report
 
 
@@ -128,7 +128,7 @@ async def get_provider_health() -> list:
     "/chat",
     response_model=ChatResponse,
     summary="Send chat message to AI",
-    dependencies=[Depends(require_roles("ADMIN", "SENIOR_TL", "TL"))],
+    dependencies=[Depends(require_permission("AI_CHAT"))],
 )
 async def chat(
     request: Request,
@@ -159,7 +159,7 @@ async def chat(
 
     if len(final_messages) > MAX_MESSAGES:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail="Too many messages",
         )
 
@@ -168,14 +168,14 @@ async def chat(
         content = msg["content"] or ""
         if len(content) > MAX_MESSAGE_CHARS:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail="Message exceeds maximum length",
             )
         total_chars += len(content)
 
     if total_chars > MAX_TOTAL_CHARS:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail="Prompt too long",
         )
 
@@ -215,7 +215,7 @@ async def chat(
     except ProviderAPIError as error:
         if error.status_code == 413:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail="AI provider response too large",
             )
         raise HTTPException(
@@ -237,17 +237,18 @@ async def chat(
     "/health",
     response_model=HealthResponse,
     summary="Check AI provider health",
-    dependencies=[Depends(require_roles("ADMIN"))],
+    dependencies=[Depends(require_permission("AI_HEALTH"))],
 )
 async def health():
     providers = [
         ProviderHealthEntry(
             name=p["name"],
-            status="healthy" if p["available"] else "unhealthy",
-            lastErrorMessage=(p.get("lastError") or {}).get("message"),
+            status=p["status"],
+            lastErrorMessage=p.get("lastErrorMessage"),
         )
         for p in await get_provider_health()
     ]
+
     return HealthResponse(providers=providers)
 
 
@@ -258,7 +259,7 @@ async def health():
     "/usage",
     response_model=UsageResponse,
     summary="Get AI usage report",
-    dependencies=[Depends(require_roles("ADMIN"))],
+    dependencies=[Depends(require_permission("AI_USAGE"))],
 )
 async def usage():
     report = await get_daily_usage_report()
