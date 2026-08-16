@@ -49,8 +49,8 @@ const certificateGenerateSchema = z
     title: z.string().min(1).max(255).default('Certificate of Achievement'),
     body: z.string().optional(),
     issuer: z.string().max(255).optional(),
-    issue_date: dateOnlySchema.optional(),
-    expiry_date: dateOnlySchema.optional(),
+    issue_date: z.string().optional(),
+    expiry_date: z.string().optional(),
     certificate_type: z
       .enum([
         'appreciation',
@@ -64,12 +64,21 @@ const certificateGenerateSchema = z
   })
   .refine(
     (data) => {
-      if (data.issue_date && data.expiry_date) {
-        return (
-          toUtcTimestamp(data.expiry_date) >= toUtcTimestamp(data.issue_date)
-        );
+      if (!data.issue_date || !data.expiry_date) {
+        return true;
       }
-      return true;
+
+      const issueDate = new Date(data.issue_date);
+      const expiryDate = new Date(data.expiry_date);
+
+      if (
+        Number.isNaN(issueDate.getTime()) ||
+        Number.isNaN(expiryDate.getTime())
+      ) {
+        return false;
+      }
+
+      return expiryDate >= issueDate;
     },
     {
       message: 'Expiry date cannot be before the issue date',
@@ -79,6 +88,7 @@ const certificateGenerateSchema = z
 
 const bulkGenerateSchema = z.object({
   template_id: z.string().uuid(),
+
   certificates: z
     .array(
       z.object({
@@ -100,7 +110,8 @@ const bulkGenerateSchema = z.object({
       })
     )
     .min(1)
-    .max(500),
+    .max(100),
+
   send_email: z.boolean().default(false),
   email_subject: z.string().max(500).optional(),
   email_body: z.string().optional(),
