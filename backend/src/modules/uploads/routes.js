@@ -135,9 +135,14 @@ async function routes(fastify) {
         fileSize: buffer.length,
       });
       if (image.previousStoragePath) {
-        await repo.deleteFile(image.previousStoragePath).catch((error) =>
-          req.log.warn({ error, path: image.previousStoragePath }, 'Failed to remove replaced avatar')
-        );
+        await repo
+          .deleteFile(image.previousStoragePath)
+          .catch((error) =>
+            req.log.warn(
+              { error, path: image.previousStoragePath },
+              'Failed to remove replaced avatar'
+            )
+          );
       }
 
       return { success: true, avatar_url: url };

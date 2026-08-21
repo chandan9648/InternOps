@@ -44,7 +44,10 @@ async function addUserImage({
       [userId, storagePath]
     );
     await client.query('COMMIT');
-    return { ...result.rows[0], previousStoragePath: previous.rows[0]?.storage_path };
+    return {
+      ...result.rows[0],
+      previousStoragePath: previous.rows[0]?.storage_path,
+    };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

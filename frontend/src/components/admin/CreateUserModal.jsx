@@ -116,7 +116,9 @@ export default function CreateUserModal({ open, onClose }) {
   // Register mutation
   const registerMutation = useMutation({
     mutationFn: async (payload) => {
-      const user = await api.post('/auth/register', payload).then((res) => res.data);
+      const user = await api
+        .post('/auth/register', payload)
+        .then((res) => res.data);
       if (avatar) {
         const form = new FormData();
         form.append('user_id', user.id);
