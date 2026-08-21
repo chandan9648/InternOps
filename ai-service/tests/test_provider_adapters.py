@@ -9,6 +9,7 @@ from app.providers import (
     AnthropicProvider,
     DeepSeekProvider,
     HuggingFaceProvider,
+    NvidiaProvider,
     ProviderAPIError,
     ProviderRateLimitError,
     ProviderTimeoutError,
@@ -20,6 +21,7 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 HUGGINGFACE_URL_PREFIX = "https://api-inference.huggingface.co/models/"
+NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 
 
 # ===========================================================================
@@ -49,7 +51,7 @@ async def test_gemini_rate_limit_maps_to_provider_rate_limit_error():
     provider = GeminiProvider(api_key="test-key")
 
     with pytest.raises(ProviderRateLimitError):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
     assert route.called
 
@@ -64,7 +66,7 @@ async def test_openai_timeout_maps_to_provider_timeout_error():
     provider = OpenAIProvider(api_key="test-key")
 
     with pytest.raises(ProviderTimeoutError):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
 
 # ===========================================================================
@@ -120,7 +122,7 @@ async def test_openai_server_error_maps_to_provider_api_error():
     provider = OpenAIProvider(api_key="test-key")
 
     with pytest.raises(ProviderAPIError):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
 
 # ===========================================================================
@@ -136,7 +138,7 @@ async def test_openai_oversized_response_raises_provider_api_error(monkeypatch):
     provider = OpenAIProvider(api_key="test-key")
 
     with pytest.raises(ProviderAPIError, match="exceeded"):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
 
 # ===========================================================================
@@ -144,7 +146,7 @@ async def test_openai_oversized_response_raises_provider_api_error(monkeypatch):
 # ===========================================================================
 @pytest.mark.asyncio
 @respx.mock
-async def test_groq_generate_text_success():
+async def test_groq_generate_chat_success():
     respx.post(GROQ_URL).mock(
         return_value=httpx.Response(
             200,
@@ -152,7 +154,7 @@ async def test_groq_generate_text_success():
         )
     )
     provider = GroqProvider(api_key="test-key")
-    result = await provider.generate_text("hello")
+    result = await provider.generate_chat([{"role": "user", "content": "hello"}])
     assert result == "Hello from Groq!"
 
 
@@ -165,7 +167,7 @@ async def test_groq_rate_limit_maps_to_provider_rate_limit_error():
     provider = GroqProvider(api_key="test-key")
 
     with pytest.raises(ProviderRateLimitError):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
 
 @pytest.mark.asyncio
@@ -175,7 +177,7 @@ async def test_groq_timeout_maps_to_provider_timeout_error():
     provider = GroqProvider(api_key="test-key")
 
     with pytest.raises(ProviderTimeoutError):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
 
 @pytest.mark.asyncio
@@ -199,7 +201,7 @@ async def test_groq_server_error_maps_to_provider_api_error():
     provider = GroqProvider(api_key="test-key")
 
     with pytest.raises(ProviderAPIError):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
 
 # ===========================================================================
@@ -207,7 +209,7 @@ async def test_groq_server_error_maps_to_provider_api_error():
 # ===========================================================================
 @pytest.mark.asyncio
 @respx.mock
-async def test_anthropic_generate_text_success():
+async def test_anthropic_generate_chat_success():
     respx.post(ANTHROPIC_URL).mock(
         return_value=httpx.Response(
             200,
@@ -215,7 +217,7 @@ async def test_anthropic_generate_text_success():
         )
     )
     provider = AnthropicProvider(api_key="test-key")
-    result = await provider.generate_text("hello")
+    result = await provider.generate_chat([{"role": "user", "content": "hello"}])
     assert result == "Hello from Claude!"
 
 
@@ -228,7 +230,7 @@ async def test_anthropic_rate_limit_maps_to_provider_rate_limit_error():
     provider = AnthropicProvider(api_key="test-key")
 
     with pytest.raises(ProviderRateLimitError):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
 
 @pytest.mark.asyncio
@@ -238,7 +240,7 @@ async def test_anthropic_timeout_maps_to_provider_timeout_error():
     provider = AnthropicProvider(api_key="test-key")
 
     with pytest.raises(ProviderTimeoutError):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
 
 @pytest.mark.asyncio
@@ -262,7 +264,7 @@ async def test_anthropic_server_error_maps_to_provider_api_error():
     provider = AnthropicProvider(api_key="test-key")
 
     with pytest.raises(ProviderAPIError):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
 
 # ===========================================================================
@@ -270,7 +272,7 @@ async def test_anthropic_server_error_maps_to_provider_api_error():
 # ===========================================================================
 @pytest.mark.asyncio
 @respx.mock
-async def test_deepseek_generate_text_success():
+async def test_deepseek_generate_chat_success():
     respx.post(DEEPSEEK_URL).mock(
         return_value=httpx.Response(
             200,
@@ -278,7 +280,7 @@ async def test_deepseek_generate_text_success():
         )
     )
     provider = DeepSeekProvider(api_key="test-key")
-    result = await provider.generate_text("hello")
+    result = await provider.generate_chat([{"role": "user", "content": "hello"}])
     assert result == "Hello from DeepSeek!"
 
 
@@ -291,7 +293,7 @@ async def test_deepseek_rate_limit_maps_to_provider_rate_limit_error():
     provider = DeepSeekProvider(api_key="test-key")
 
     with pytest.raises(ProviderRateLimitError):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
 
 @pytest.mark.asyncio
@@ -301,7 +303,7 @@ async def test_deepseek_timeout_maps_to_provider_timeout_error():
     provider = DeepSeekProvider(api_key="test-key")
 
     with pytest.raises(ProviderTimeoutError):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
 
 @pytest.mark.asyncio
@@ -325,7 +327,7 @@ async def test_deepseek_server_error_maps_to_provider_api_error():
     provider = DeepSeekProvider(api_key="test-key")
 
     with pytest.raises(ProviderAPIError):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
 
 # ===========================================================================
@@ -333,7 +335,7 @@ async def test_deepseek_server_error_maps_to_provider_api_error():
 # ===========================================================================
 @pytest.mark.asyncio
 @respx.mock
-async def test_huggingface_generate_text_success():
+async def test_huggingface_generate_chat_success():
     respx.post(url__startswith=HUGGINGFACE_URL_PREFIX).mock(
         return_value=httpx.Response(
             200,
@@ -341,7 +343,7 @@ async def test_huggingface_generate_text_success():
         )
     )
     provider = HuggingFaceProvider(api_key="test-token")
-    result = await provider.generate_text("hello")
+    result = await provider.generate_chat([{"role": "user", "content": "hello"}])
     assert result == "Hello from HuggingFace!"
 
 
@@ -354,7 +356,7 @@ async def test_huggingface_rate_limit_maps_to_provider_rate_limit_error():
     provider = HuggingFaceProvider(api_key="test-token")
 
     with pytest.raises(ProviderRateLimitError):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
 
 @pytest.mark.asyncio
@@ -366,7 +368,7 @@ async def test_huggingface_timeout_maps_to_provider_timeout_error():
     provider = HuggingFaceProvider(api_key="test-token")
 
     with pytest.raises(ProviderTimeoutError):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
 
 @pytest.mark.asyncio
@@ -392,7 +394,7 @@ async def test_huggingface_server_error_maps_to_provider_api_error():
     provider = HuggingFaceProvider(api_key="test-token")
 
     with pytest.raises(ProviderAPIError):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
 
 
 @pytest.mark.asyncio
@@ -407,4 +409,84 @@ async def test_huggingface_oversized_response_raises_provider_api_error(monkeypa
     provider = HuggingFaceProvider(api_key="test-token")
 
     with pytest.raises(ProviderAPIError, match="exceeded"):
-        await provider.generate_text("hello")
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
+
+
+# ===========================================================================
+# NVIDIA PROVIDER TESTS
+# ===========================================================================
+@pytest.mark.asyncio
+@respx.mock
+async def test_nvidia_generate_chat_success():
+    respx.post(NVIDIA_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "Hello from Nvidia NIM!"}}]},
+        )
+    )
+    provider = NvidiaProvider(api_key="test-key")
+    result = await provider.generate_chat([{"role": "user", "content": "hello"}])
+    assert result == "Hello from Nvidia NIM!"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_nvidia_rate_limit_maps_to_provider_rate_limit_error():
+    respx.post(NVIDIA_URL).mock(
+        return_value=httpx.Response(429, text="Rate limit exceeded")
+    )
+    provider = NvidiaProvider(api_key="test-key")
+
+    with pytest.raises(ProviderRateLimitError) as exc:
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
+    assert exc.value.status_code == 429
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_nvidia_timeout_maps_to_provider_timeout_error():
+    respx.post(NVIDIA_URL).mock(side_effect=httpx.TimeoutException("timed out"))
+    provider = NvidiaProvider(api_key="test-key")
+
+    with pytest.raises(ProviderTimeoutError):
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_nvidia_generate_json_returns_parsed_dict():
+    respx.post(NVIDIA_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"language": "python"}'}}]},
+        )
+    )
+    provider = NvidiaProvider(api_key="test-key")
+    result = await provider.generate_json("detect language", schema={"language": "str"})
+    assert result == {"language": "python"}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_nvidia_server_error_maps_to_provider_api_error():
+    respx.post(NVIDIA_URL).mock(return_value=httpx.Response(502, text="bad gateway"))
+    provider = NvidiaProvider(api_key="test-key")
+
+    with pytest.raises(ProviderAPIError):
+        await provider.generate_chat([{"role": "user", "content": "hello"}])
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_nvidia_oversized_response_raises_provider_api_error(monkeypatch):
+    monkeypatch.setattr("app.providers.nvidia.MAX_RESPONSE_BYTES", 10)
+    respx.post(NVIDIA_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "x" * 100}}]},
+        )
+    )
+    provider = NvidiaProvider(api_key="test-key")
+
+    with pytest.raises(ProviderAPIError, match="exceeded"):
+        await provider.generate_chat([{"role": "user", "content": "hello"}])

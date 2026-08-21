@@ -20,6 +20,7 @@ module.exports = async function ratingsRoutes(fastify) {
   fastify.post(
     '/',
     {
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
       schema: { tags: ['Ratings'], description: 'Submit a rating' },
       preHandler: [auth, rbac('ADMIN', 'SENIOR_TL', 'TL', 'CAPTAIN'), sanitize],
     },
@@ -71,6 +72,57 @@ module.exports = async function ratingsRoutes(fastify) {
       }).catch(() => {});
 
       return reply.status(201).send(rating);
+    }
+  );
+
+  // View a department ratings sheet (Admin / authorized hierarchy)
+  fastify.get(
+    '/department/:deptId/sheet',
+    {
+      schema: {
+        tags: ['Ratings'],
+        description: 'Get a department ratings sheet',
+      },
+      preHandler: [auth, rbac('ADMIN', 'SENIOR_TL', 'TL', 'CAPTAIN')],
+    },
+    async (req, reply) => {
+      const paramsSchema = z.object({ deptId: z.string().uuid() });
+      const querySchema = z
+        .object({
+          from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        })
+        .refine((value) => value.from <= value.to, {
+          message: 'from must be on or before to',
+        })
+        .refine(
+          (value) => {
+            const from = new Date(`${value.from}T00:00:00Z`);
+            const to = new Date(`${value.to}T00:00:00Z`);
+            return (to - from) / 86400000 <= 366;
+          },
+          { message: 'Date range cannot exceed 366 days' }
+        );
+
+      const parsedParams = paramsSchema.safeParse(req.params);
+      const parsedQuery = querySchema.safeParse(req.query);
+      if (!parsedParams.success || !parsedQuery.success) {
+        return reply.status(400).send({
+          error: 'Invalid ratings sheet request',
+          details: [
+            ...(parsedParams.success ? [] : parsedParams.error.issues),
+            ...(parsedQuery.success ? [] : parsedQuery.error.issues),
+          ],
+        });
+      }
+
+      return repo.getDepartmentRatingsSheet({
+        departmentId: parsedParams.data.deptId,
+        requesterId: req.user.id,
+        isAdmin: req.user.role === 'ADMIN',
+        from: parsedQuery.data.from,
+        to: parsedQuery.data.to,
+      });
     }
   );
 

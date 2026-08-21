@@ -11,7 +11,7 @@ const pool = require('./config/db');
 const metrics = require('./utils/metrics');
 const { initializeWebSocket, getIO } = require('./websocket');
 const noticesRoutes = require('./modules/notices/routes');
-const { getRedisStatus } = require('./config/redis');
+const { getRedisStatus, getRedisClient } = require('./config/redis');
 const { csrfMiddleware } = require('./middleware/csrf');
 const { sanitizationMiddleware } = require('./middleware/sanitize');
 const { createAuditLog } = require('./utils/audit');
@@ -35,16 +35,20 @@ const app = Fastify({
 app.get(
   '/metrics',
   {
-    preHandler: [auth, rbac('ADMIN')],
+    preHandler: [
+      auth,
+      rbac('ADMIN'),
+      async (req, reply) => {
+        const authHeader = req.headers.authorization;
+        const expectedToken = `Bearer ${process.env.METRICS_TOKEN}`;
+
+        if (authHeader !== expectedToken) {
+          return reply.status(404).send();
+        }
+      },
+    ],
     config: {
       rateLimit: false,
-    },
-    preHandler: async (req, reply) => {
-      const authHeader = req.headers['authorization'];
-      const expectedToken = `Bearer ${process.env.METRICS_TOKEN}`;
-      if (authHeader !== expectedToken) {
-        return reply.status(404).send();
-      }
     },
   },
   metrics.metricsEndpoint
@@ -58,15 +62,6 @@ app.get(
     },
   },
   async (req, reply) => {
-    const redisStatus = getRedisStatus();
-    if (process.env.NODE_ENV === 'test') {
-      return reply.send({ status: 'ok' });
-    }
-    if (redisStatus === 'disconnected') {
-      return reply
-        .status(503)
-        .send({ status: 'degraded', redis: 'disconnected' });
-    }
     return reply.send({ status: 'ok' });
   }
 );
@@ -286,6 +281,9 @@ if (process.env.NODE_ENV !== 'test') {
 
 app.register(require('./routes'), { prefix: '/api/v1' });
 app.register(require('./routes.v2'), { prefix: '/api/v2' });
+app.register(require('./modules/github-sync/routes'), {
+  prefix: '/api/v1/github',
+});
 
 app.get('/', async (req, reply) => {
   reply.redirect('/api-docs');
@@ -430,6 +428,7 @@ const start = async () => {
     });
     initializeWebSocket(app.server, app.log);
     await bulkJobQueue.init();
+    await getRedisClient();
     app.log.info(
       { port: config.port },
       `Server listening on port ${config.port}`
