@@ -19,7 +19,7 @@ if (databaseUrl) {
   poolConfig.port = process.env.DB_PORT
     ? Number.parseInt(process.env.DB_PORT, 10)
     : undefined;
-  poolConfig.user = process.env.DB_USER;
+  poolConfig.user = process.env.DB_USER || 'postgres';
   poolConfig.password = process.env.DB_PASSWORD;
   poolConfig.database = process.env.DB_NAME;
 }
