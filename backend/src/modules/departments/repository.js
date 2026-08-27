@@ -1,12 +1,18 @@
 const pool = require('../../config/db');
 
 async function createDepartment(name, createdBy) {
-  const sanitizedName = typeof name === 'string' ? name.trim() : name;
+  const normalizedName = name?.trim();
+
+  if (!normalizedName) {
+    const err = new Error('Department name is required');
+    err.status = 400;
+    throw err;
+  }
 
   try {
     const res = await pool.query(
       'INSERT INTO departments (name, created_by) VALUES ($1,$2) RETURNING *',
-      [sanitizedName, createdBy]
+      [normalizedName, createdBy]
     );
     return res.rows[0];
   } catch (error) {
