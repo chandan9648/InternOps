@@ -1,10 +1,12 @@
 const pool = require('../../config/db');
 
 async function createDepartment(name, createdBy) {
+  const sanitizedName = typeof name === 'string' ? name.trim() : name;
+
   try {
     const res = await pool.query(
       'INSERT INTO departments (name, created_by) VALUES ($1,$2) RETURNING *',
-      [name, createdBy]
+      [sanitizedName, createdBy]
     );
     return res.rows[0];
   } catch (error) {
