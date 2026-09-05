@@ -1,5 +1,28 @@
 const pool = require('../../config/db');
-const { NotFoundError, ForbiddenError } = require('../../utils/errors');
+const { assertActivityAllowed } = require('../team/lifecycle');
+function dateOnly(value) {
+  return value ? String(value).slice(0, 10) : null;
+}
+
+function memberAppliesToRange(member, from, to) {
+  const joinedOn = dateOnly(member.joining_date);
+  if (joinedOn && joinedOn > to) return false;
+
+  const status = member.internship_status || 'ACTIVE';
+  if (status === 'COMPLETED') {
+    const completedOn = dateOnly(
+      member.extended_completion_date || member.completion_date
+    );
+    return !completedOn || completedOn >= from;
+  }
+
+  if (['TERMINATED', 'DISCONTINUED'].includes(status)) {
+    const endedOn = dateOnly(member.lifecycle_effective_date);
+    return !endedOn || endedOn >= from;
+  }
+
+  return true;
+}
 
 async function markAttendance(
   userId,
@@ -9,6 +32,7 @@ async function markAttendance(
   remarks,
   client = pool
 ) {
+  await assertActivityAllowed(client, userId, date);
   const res = await client.query(
     `INSERT INTO attendance (user_id, marked_by, date, status, remarks)
      VALUES ($1,$2,$3,$4,$5)
@@ -62,6 +86,110 @@ async function getAttendance(userId, { from, to, page = 1, limit = 30 } = {}) {
   return { records: res.rows, total, page: safePage, limit: safeLimit };
 }
 
+async function getDepartmentAttendanceSheet({
+  departmentId,
+  requesterId,
+  isAdmin,
+  requesterRole,
+  from,
+  to,
+}) {
+  const departmentWide = isAdmin || requesterRole === 'SENIOR_TL';
+  const memberScope = departmentWide
+    ? `SELECT id, full_name, email, intern_code, role, department_id, joining_date::text, internship_status, lifecycle_effective_date::text, completion_date::text, extended_completion_date::text
+       FROM users
+       WHERE department_id = $1 AND deleted_at IS NULL AND role <> 'ADMIN'`
+    : `WITH RECURSIVE visible_users AS (
+         SELECT id, full_name, email, intern_code, role, department_id, manager_id, joining_date, internship_status, lifecycle_effective_date, completion_date, extended_completion_date, 0 AS depth
+         FROM users
+         WHERE id = $2 AND deleted_at IS NULL
+         UNION ALL
+         SELECT u.id, u.full_name, u.email, u.intern_code, u.role, u.department_id, u.manager_id, u.joining_date, u.internship_status, u.lifecycle_effective_date, u.completion_date, u.extended_completion_date,
+                visible_users.depth + 1
+         FROM users u
+         INNER JOIN visible_users ON u.manager_id = visible_users.id
+         WHERE u.deleted_at IS NULL AND visible_users.depth < 100
+       )
+       SELECT id, full_name, email, intern_code, role, department_id, joining_date::text, internship_status, lifecycle_effective_date::text, completion_date::text, extended_completion_date::text
+       FROM visible_users
+       WHERE department_id = $1`;
+
+  const memberParams = departmentWide
+    ? [departmentId]
+    : [departmentId, requesterId];
+
+  const membersResult = await pool.query(memberScope, memberParams);
+  const scopedMemberIds = membersResult.rows.map((member) => member.id);
+  let availableMonths = [];
+  if (scopedMemberIds.length > 0) {
+    const availableMonthsResult = await pool.query(
+      `SELECT DISTINCT TO_CHAR(a.date, 'YYYY-MM') AS month
+       FROM attendance a
+       WHERE a.user_id = ANY($1::uuid[])
+         AND a.deleted_at IS NULL
+       ORDER BY month ASC`,
+      [scopedMemberIds]
+    );
+    availableMonths = availableMonthsResult.rows.map((row) => row.month);
+  }
+  const members = membersResult.rows
+    .filter((member) => memberAppliesToRange(member, from, to))
+    .sort((a, b) => {
+      const roleOrder = {
+        ADMIN: 0,
+        SENIOR_TL: 1,
+        TL: 2,
+        CAPTAIN: 3,
+        INTERN: 4,
+      };
+      const roleDifference =
+        (roleOrder[a.role] ?? 99) - (roleOrder[b.role] ?? 99);
+      if (roleDifference) return roleDifference;
+      return String(a.full_name || a.email || '').localeCompare(
+        String(b.full_name || b.email || ''),
+        undefined,
+        { sensitivity: 'base' }
+      );
+    });
+  const memberIds = members.map((member) => member.id);
+
+  if (memberIds.length === 0) {
+    return {
+      members: [],
+      dates: [],
+      records: [],
+      available_months: availableMonths,
+    };
+  }
+
+  const recordsResult = await pool.query(
+    `SELECT a.id, a.user_id, TO_CHAR(a.date, 'YYYY-MM-DD') AS date, a.status, a.remarks,
+            a.marked_by, marker.full_name AS marked_by_name
+     FROM attendance a
+     LEFT JOIN users marker ON marker.id = a.marked_by
+     WHERE a.user_id = ANY($1::uuid[])
+       AND a.date >= $2
+       AND a.date <= $3
+       AND a.deleted_at IS NULL
+     ORDER BY a.date ASC, a.user_id ASC`,
+    [memberIds, from, to]
+  );
+
+  const datesResult = await pool.query(
+    `SELECT TO_CHAR(day, 'YYYY-MM-DD') AS date
+     FROM generate_series($1::date, $2::date, interval '1 day') AS day
+     WHERE EXTRACT(ISODOW FROM day) <> 7`,
+    [from, to]
+  );
+
+  return {
+    members,
+    dates: datesResult.rows.map((row) => row.date),
+    records: recordsResult.rows,
+    available_months: availableMonths,
+  };
+}
+
 async function getMonthlyStats(userId, month, year) {
   // SARGable date-range form: avoid EXTRACT() on a date column, which would
   // force a sequential scan. With the date range we can use a btree index.
@@ -88,6 +216,7 @@ async function bulkMark(entries, markedBy, client = pool) {
   const out = [];
 
   for (const e of entries) {
+    await assertActivityAllowed(client, e.user_id, e.date);
     const r = await client.query(
       `INSERT INTO attendance (user_id, marked_by, date, status, remarks)
        VALUES ($1,$2,$3,$4,$5)
@@ -128,7 +257,23 @@ async function listHierarchySubordinates(managerId, targetIds) {
 }
 
 // Add this to your repository.js
-async function getAuthorizedSubordinates(managerId) {
+async function getAuthorizedSubordinates(
+  managerId,
+  requesterRole,
+  departmentId
+) {
+  if (requesterRole === 'SENIOR_TL') {
+    const { rows } = await pool.query(
+      `SELECT id, full_name, email, role FROM users
+       WHERE department_id = $1 AND id <> $2 AND role <> 'ADMIN'
+         AND deleted_at IS NULL
+       ORDER BY CASE role WHEN 'SENIOR_TL' THEN 1 WHEN 'TL' THEN 2
+         WHEN 'CAPTAIN' THEN 3 WHEN 'INTERN' THEN 4 ELSE 5 END,
+         LOWER(COALESCE(NULLIF(TRIM(full_name), ''), email)), LOWER(email), id`,
+      [departmentId, managerId]
+    );
+    return rows;
+  }
   const res = await pool.query(
     `WITH RECURSIVE subordinates AS (
        SELECT id, full_name, email, role, 0 AS depth FROM users WHERE manager_id = $1 AND deleted_at IS NULL
@@ -138,7 +283,17 @@ async function getAuthorizedSubordinates(managerId) {
        INNER JOIN subordinates s ON u.manager_id = s.id
        WHERE u.deleted_at IS NULL AND s.depth < 100
      )
-     SELECT id, full_name, email, role FROM subordinates`,
+     SELECT id, full_name, email, role FROM subordinates
+     ORDER BY CASE role
+       WHEN 'ADMIN' THEN 0
+       WHEN 'SENIOR_TL' THEN 1
+       WHEN 'TL' THEN 2
+       WHEN 'CAPTAIN' THEN 3
+       WHEN 'INTERN' THEN 4
+       ELSE 5
+     END,
+     LOWER(COALESCE(NULLIF(TRIM(full_name), ''), email)),
+     LOWER(email), id`,
     [managerId]
   );
   return res.rows;
@@ -232,10 +387,12 @@ async function markAnomalyViewed(anomalyId, managerId, isAdmin) {
 module.exports = {
   markAttendance,
   getAttendance,
+  getDepartmentAttendanceSheet,
   getMonthlyStats,
   bulkMark,
   listHierarchySubordinates,
   getAuthorizedSubordinates,
   getAnomalies,
   markAnomalyViewed,
+  memberAppliesToRange,
 };

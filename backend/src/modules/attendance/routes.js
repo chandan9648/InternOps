@@ -9,6 +9,7 @@ const { checkHierarchyAccess } = require('../../utils/hierarchy');
 const repo = require('./repository');
 const { createAuditLog, extractRequestInfo } = require('../../utils/audit');
 const { dbTx } = require('../../utils/dbTx');
+const pLimit = require('p-limit');
 const {
   send: sendNotification,
   bulkSend,
@@ -29,7 +30,7 @@ async function routes(fastify) {
     '/mark',
     {
       schema: { tags: ['Attendance'], description: 'Mark single attendance' },
-      preHandler: [auth, rbac('CAPTAIN', 'TL', 'SENIOR_TL', 'ADMIN'), sanitize],
+      preHandler: [auth, rbac('CAPTAIN', 'TL', 'SENIOR_TL'), sanitize],
     },
     async (req, reply) => {
       try {
@@ -38,7 +39,7 @@ async function routes(fastify) {
           date: z
             .string()
             .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD'),
-          status: z.enum(['PRESENT', 'ABSENT', 'HALF_DAY']),
+          status: z.enum(['PRESENT', 'ABSENT', 'INFORMED']),
           remarks: z.string().max(500).optional(),
         });
         const parsed = schema.safeParse(req.body);
@@ -115,6 +116,8 @@ async function routes(fastify) {
         return reply.status(201).send(attendance);
       } catch (err) {
         req.log.error(err, 'Error in POST /attendance/mark');
+        if (err.statusCode)
+          return reply.status(err.statusCode).send({ error: err.message });
         return reply.status(500).send({ error: 'Internal server error' });
       }
     }
@@ -126,7 +129,7 @@ async function routes(fastify) {
     {
       config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
       schema: { tags: ['Attendance'], description: 'Bulk mark attendance' },
-      preHandler: [auth, rbac('CAPTAIN', 'TL', 'SENIOR_TL', 'ADMIN'), sanitize],
+      preHandler: [auth, rbac('CAPTAIN', 'TL', 'SENIOR_TL'), sanitize],
     },
     async (req, reply) => {
       try {
@@ -135,11 +138,11 @@ async function routes(fastify) {
           date: z
             .string()
             .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD'),
-          status: z.enum(['PRESENT', 'ABSENT', 'HALF_DAY']),
+          status: z.enum(['PRESENT', 'ABSENT', 'INFORMED']),
           remarks: z.string().max(500).optional(),
         });
         const bodySchema = z.object({
-          entries: z.array(entrySchema).min(1),
+          entries: z.array(entrySchema).min(1).max(200),
         });
         const parsed = bodySchema.safeParse(req.body);
         if (!parsed.success) {
@@ -150,7 +153,7 @@ async function routes(fastify) {
         }
         const entries = parsed.data.entries;
 
-        // Authorize all entries in a single recursive query — avoids N+1.
+        // Authorize all entries in a single recursive query - avoids N+1.
         if (req.user.role !== 'ADMIN') {
           const targetIds = [...new Set(entries.map((e) => e.user_id))];
           if (targetIds.includes(req.user.id)) {
@@ -196,21 +199,29 @@ async function routes(fastify) {
         }));
 
         const notifications = await bulkSend(notificationsData);
+        const limit = pLimit(5);
+        await Promise.all(
+          notifications.map((notification) =>
+            limit(async () => {
+              const unreadCount = await getUnreadCount(notification.user_id);
 
-        for (const notification of notifications) {
-          const unreadCount = await getUnreadCount(notification.user_id);
+              await notifyUser(notification.user_id, 'notification-received', {
+                notification,
+                unreadCount,
+              });
+            })
+          )
+        );
 
-          await notifyUser(notification.user_id, 'notification-received', {
-            notification,
-            unreadCount,
-          });
-        }
-
-        for (const attendance of results) {
-          await notifyUser(attendance.user_id, 'attendance-marked', {
-            attendance,
-          });
-        }
+        await Promise.all(
+          results.map((attendance) =>
+            limit(async () => {
+              await notifyUser(attendance.user_id, 'attendance-marked', {
+                attendance,
+              });
+            })
+          )
+        );
 
         return {
           success: true,
@@ -219,6 +230,65 @@ async function routes(fastify) {
         };
       } catch (err) {
         req.log.error(err, 'Error in POST /attendance/bulk');
+        if (err.statusCode)
+          return reply.status(err.statusCode).send({ error: err.message });
+        return reply.status(500).send({ error: 'Internal server error' });
+      }
+    }
+  );
+
+  // Department-scoped attendance sheet
+  fastify.get(
+    '/department/:deptId/sheet',
+    {
+      schema: {
+        tags: ['Attendance'],
+        description: 'Get a department attendance sheet',
+      },
+      preHandler: [auth, rbac('CAPTAIN', 'TL', 'SENIOR_TL', 'ADMIN')],
+    },
+    async (req, reply) => {
+      try {
+        const paramsSchema = z.object({ deptId: z.string().uuid() });
+        const querySchema = z
+          .object({
+            from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+            to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          })
+          .refine((value) => value.from <= value.to, {
+            message: 'from must be on or before to',
+          })
+          .refine(
+            (value) => {
+              const from = new Date(`${value.from}T00:00:00Z`);
+              const to = new Date(`${value.to}T00:00:00Z`);
+              return (to - from) / 86400000 <= 62;
+            },
+            { message: 'Date range cannot exceed 62 days' }
+          );
+
+        const parsedParams = paramsSchema.safeParse(req.params);
+        const parsedQuery = querySchema.safeParse(req.query);
+        if (!parsedParams.success || !parsedQuery.success) {
+          return reply.status(400).send({
+            error: 'Invalid attendance sheet request',
+            details: [
+              ...(parsedParams.success ? [] : parsedParams.error.issues),
+              ...(parsedQuery.success ? [] : parsedQuery.error.issues),
+            ],
+          });
+        }
+
+        return await repo.getDepartmentAttendanceSheet({
+          departmentId: parsedParams.data.deptId,
+          requesterId: req.user.id,
+          isAdmin: req.user.role === 'ADMIN',
+          requesterRole: req.user.role,
+          from: parsedQuery.data.from,
+          to: parsedQuery.data.to,
+        });
+      } catch (err) {
+        req.log.error(err, 'Error in GET /attendance/department/:deptId/sheet');
         return reply.status(500).send({ error: 'Internal server error' });
       }
     }
@@ -228,18 +298,45 @@ async function routes(fastify) {
   fastify.get(
     '/:userId',
     {
-      schema: { tags: ['Attendance'], description: 'Get attendance records' },
+      schema: {
+        tags: ['Attendance'],
+        description: 'Get attendance records',
+        params: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            userId: { type: 'string', format: 'uuid' },
+          },
+          required: ['userId'],
+        },
+        querystring: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            from: { type: 'string', format: 'date' },
+            to: { type: 'string', format: 'date' },
+            page: { type: 'integer', minimum: 1, default: 1 },
+            limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 },
+          },
+        },
+      },
       preHandler: [auth, ownership('userId')],
     },
     async (req, reply) => {
       try {
         const { from, to, page, limit } = req.query;
-        return await repo.getAttendance(req.params.userId, {
+        if (from && to && new Date(from) > new Date(to)) {
+          return reply.status(400).send({
+            error: "'from' date must be before or equal to 'to' date",
+          });
+        }
+        const result = await repo.getAttendance(req.params.userId, {
           from,
           to,
           page,
           limit,
         });
+        return reply.send(result);
       } catch (err) {
         req.log.error(err, 'Error in GET /attendance/:userId');
         return reply.status(500).send({ error: 'Internal server error' });
@@ -404,17 +501,45 @@ async function routes(fastify) {
           const department_id = req.query?.department_id;
           if (department_id) {
             const res = await pool.query(
-              'SELECT id, full_name, email, role, department_id FROM users WHERE deleted_at IS NULL AND department_id = $1',
+              `SELECT id, full_name, email, role, department_id
+               FROM users
+               WHERE deleted_at IS NULL AND department_id = $1
+               ORDER BY CASE role
+                 WHEN 'ADMIN' THEN 0
+                 WHEN 'SENIOR_TL' THEN 1
+                 WHEN 'TL' THEN 2
+                 WHEN 'CAPTAIN' THEN 3
+                 WHEN 'INTERN' THEN 4
+                 ELSE 5
+               END,
+               LOWER(COALESCE(NULLIF(TRIM(full_name), ''), email)),
+               LOWER(email), id`,
               [department_id]
             );
             return res.rows;
           }
           const all = await pool.query(
-            'SELECT id, full_name, email, role, department_id FROM users WHERE deleted_at IS NULL'
+            `SELECT id, full_name, email, role, department_id
+             FROM users
+             WHERE deleted_at IS NULL
+             ORDER BY CASE role
+               WHEN 'ADMIN' THEN 0
+               WHEN 'SENIOR_TL' THEN 1
+               WHEN 'TL' THEN 2
+               WHEN 'CAPTAIN' THEN 3
+               WHEN 'INTERN' THEN 4
+               ELSE 5
+             END,
+             LOWER(COALESCE(NULLIF(TRIM(full_name), ''), email)),
+             LOWER(email), id`
           );
           return all.rows;
         }
-        return await repo.getAuthorizedSubordinates(req.user.id);
+        return await repo.getAuthorizedSubordinates(
+          req.user.id,
+          req.user.role,
+          req.user.departmentId || req.user.department_id
+        );
       } catch (err) {
         req.log.error(err, 'Error in GET /attendance/authorized-members');
         return reply.status(500).send({ error: 'Internal server error' });

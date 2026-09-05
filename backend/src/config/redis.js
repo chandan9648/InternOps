@@ -6,6 +6,8 @@ let client = null;
 let clientPromise = null;
 let redisConnected = false;
 let reconnectDelay = 1000;
+let retryAfter = 0;
+let unavailableWarningShown = false;
 const MAX_RECONNECT_DELAY = 30000;
 
 function getSafeRedisError(err) {
@@ -60,6 +62,10 @@ async function getRedisClient() {
   if (!redisOptions) return null;
 
   if (client) return client;
+
+  if (Date.now() < retryAfter) {
+    return null;
+  }
   if (clientPromise) return clientPromise;
 
   clientPromise = (async () => {
@@ -146,7 +152,7 @@ async function isAccessTokenBlacklisted(jti) {
   if (!client) {
     logger.warn(
       { jti },
-      'Redis unavailable — skipping token revocation check (fail open)'
+      'Redis unavailable - skipping token revocation check (fail open)'
     );
 
     // Fail open: allow the request when Redis is unavailable.
